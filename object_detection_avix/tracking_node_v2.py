@@ -3,7 +3,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool, Int32MultiArray, Float32MultiArray, Int32, ByteMultiArray
 from ultralytics import YOLO
-from avix_msg.msg import TrackingUpdate
+from avix_msg.msg import TrackingUpdate, ObjectDetection, ObjectDetections
 import torch
 import cv2
 import struct
@@ -23,18 +23,6 @@ packet_header = bytes([0x41, 0x76, 0x69, 0x78])
 # Sender ID: 0x04 (AI)
 sender_id = bytes([0x04])
 
-def calc_crc(data):
-    # Initialize the checksum to 0
-    d =bytearray(data)
-    checksum = 0
-    # Iterate over the data and add each byte to the checksum
-    for b in data:
-        checksum += b
-
-    checksum = checksum%65536 
-     # Return the lower 2 bytes of the checksum as a 2-byte byte array compared to the crc
-    return checksum.to_bytes(2, byteorder='little')
-
 class TrackingNode(Node):
     def __init__(self):
         super().__init__('object_tracking_node')
@@ -44,26 +32,8 @@ class TrackingNode(Node):
         self.target_subscriber = self.create_subscription(Int32, '/object_detection/tracking_target_id', self.target_id_callback, 10)
         # Publisher for the deviation 
         self.deviation_publisher = self.create_publisher(TrackingUpdate, '/object_detection/target_deviation', 10)
-        self.box_publisher = self.create_publisher(Int32MultiArray, '/object_detection/packet_data', 10) # bytes array is not working yet
+        self.box_publisher = self.create_publisher(ObjectDetections, '/object_detection/detections', 10) # bytes array is not working yet
         self.initializing = True
-        
-        #check if enviornment is ok
-        if(not torch.cuda.is_available()):
-            self.get_logger().warn(f'Pytorch has no cuda support, please reinstall')
-
-        # Get the directory where your package is installed
-        package_dir = get_package_share_directory('object_detection_avix')
-        
-        # Construct the full path to the .engine file
-        engine_path = os.path.join(package_dir, 'yolov8n.engine')
-
-        self.get_logger().info(f'Initializing Model...')
-
-        # Initialize your YOLO model
-        self.model =  YOLO(engine_path,task='detect')
-
-        # Initialize CV bridge
-        self.bridge = CvBridge()
 
         # initialize the parameter
         self.declare_parameter('tracking_enabled', False)
@@ -81,6 +51,32 @@ class TrackingNode(Node):
 
         self.declare_parameter('target_object', [0])
         self.target_objects = self.get_parameter('target_object').value
+        
+        #check if enviornment is ok
+        if(not torch.cuda.is_available()):
+            self.get_logger().warn(f'Pytorch has no cuda support, please reinstall')
+
+        # Get the directory where your package is installed
+        package_dir = get_package_share_directory('object_detection_avix')
+        
+        # Construct the full path to the .engine file
+        engine_path = os.path.join(package_dir, 'yolov8n.engine')
+
+        self.get_logger().info(f'Initializing Model...')
+
+        # Initialize your YOLO model
+        self.model =  YOLO(engine_path,task='detect')
+
+        # need to track once for it to start
+        white_frame = np.full((self.input_height, self.input_width, 3), 255, np.uint8)
+        self.model.track(white_frame, persist=True, conf=self.confidence, classes=self.target_objects, verbose=False, imgsz=(self.input_height,self.input_width))
+
+        self.get_logger().info(f'Model Initialized...')
+        
+        # Initialize CV bridge
+        self.bridge = CvBridge()
+
+       
 
         # initialize the tracking variable
         self.target_id = -1 # for following
@@ -121,48 +117,48 @@ class TrackingNode(Node):
         # do the tracking
         results = self.model.track(cv_image, persist=True, conf=self.confidence, classes=self.target_objects, verbose=False, imgsz=(self.input_height,self.input_width))
         # Prepare the objects' data
-        objects_data = b''
+        objects_data = ObjectDetections()
+        num_detections = 0
         # analyze the results
         # if it is following object
         if(self.target_id >= 0):
-             for d in reversed(results[0].boxes):
+            for d in reversed(results[0].boxes):
                 c = int(d.cls)
                 obj_id = 0 if d.id is None else int(d.id.item())
                 xyxy = d.xyxy.squeeze()
                 # Convert coordinates to the required format and pack them into bytes
-                x1, y1, x2, y2 = [int(coord * 10) for coord in xyxy]
+                x1, y1, x2, y2 = [float(coord) for coord in xyxy]
                 if(obj_id == self.target_id):
-                    self.follow((x2+x1)/20,(y2+y1)/20) #20 because it is multiplied by 10
+                    self.follow((x2+x1)/2,(y2+y1)/2) #20 because it is multiplied by 10
                     c = 99 # object we are tracking
-                obj_data = struct.pack('<HHHHHB', x1, y1, x2, y2, obj_id, c)
-                objects_data += obj_data
-                c, conf, id = int(d.cls), float(d.conf), None if d.id is None else int(d.id.item())
-                name = ('' if id is None else f'id:{id} ') + results[0].names[c]
-                label = (f'{name} {conf:.2f}' if conf else name) 
+                detection = ObjectDetection()
+                detection.id = obj_id  # Assign the detection ID
+                detection.bbox = [x1, y1, x2, y2]  # Replace with actual bbox coordinates
+                detection.class_type = c  # Replace with actual class type
+                detection.confidence = float(d.conf)  # Replace with actual confidence
+                num_detections +=1
+                objects_data.detections.append(detection)
 
         else:
-             for d in reversed(results[0].boxes):
+            for d in reversed(results[0].boxes):
                 c = int(d.cls)
                 obj_id = 0 if d.id is None else int(d.id.item())
                 xyxy = d.xyxy.squeeze()
                 
                 # Convert coordinates to the required format and pack them into bytes
-                x1, y1, x2, y2 = [int(coord * 10) for coord in xyxy]
-                obj_data = struct.pack('<HHHHHB', x1, y1, x2, y2, obj_id, c)
-                objects_data += obj_data
-                c, conf, id = int(d.cls), float(d.conf), None if d.id is None else int(d.id.item())
-                name = ('' if id is None else f'id:{id} ') + results[0].names[c]
-                label = (f'{name} {conf:.2f}' if conf else name) 
+                x1, y1, x2, y2 = [float(coord) for coord in xyxy]
+                detection = ObjectDetection()
+                detection.id = obj_id  # Assign the detection ID
+                detection.bbox = [x1, y1, x2, y2]  # Replace with actual bbox coordinates
+                detection.class_type = c  # Replace with actual class type
+                detection.confidence = float(d.conf)  # Replace with actual confidence
+                num_detections +=1
+                objects_data.detections.append(detection)
+
+
         #self.get_logger().info(f'object data: {objects_data}')
-        if(objects_data): 
-            length_byte = struct.pack('B', (len(sender_id) + len(objects_data)))
-            packet = packet_header + length_byte + sender_id + objects_data
-            crc = calc_crc(packet)
-            packet += crc
-            packet_data =  [int(byte) for byte in packet]
-            # self.get_logger().info(f'packet data: {packet_data}')
-            # Create a ByteMultiArray message and assign the data
-            self.box_publisher.publish(Int32MultiArray(data = packet_data))
+        if(num_detections>0): 
+            self.box_publisher.publish(objects_data)
             
 
     def follow(self, cx, cy):
