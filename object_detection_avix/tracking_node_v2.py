@@ -110,8 +110,8 @@ class TrackingNode(Node):
         height, width = cv_image.shape[:2]
         if width != self.input_width or height != self.input_height:
             # resize the image
-            self.get_logger().warn(
-                f"Received image of dimensions ({width}, {height}), which does not match expected dimensions ({self.input_width}, {self.input_height}). Resizing image.")
+            #self.get_logger().warn(
+              #  f"Received image of dimensions ({width}, {height}), which does not match expected dimensions ({self.input_width}, {self.input_height}). Resizing image.")
             cv_image = cv2.resize(cv_image, (self.input_width, self.input_height))
 
         # do the tracking

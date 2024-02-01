@@ -25,7 +25,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'tracking_node = object_detection_avix.tracking_node_v2:main',
+            'tracking_node = object_detection_avix.tracking_node_v3:main',
         ],
     },
 )
