@@ -73,7 +73,7 @@ class ReIDTrack():
 
     def track(self,frame):
         tic = time.time()
-        results = self.model.predict(source = frame ,conf=0.6,classes=0,imgsz=(480,640),verbose=False)
+        results = self.model.predict(source = frame ,conf=0.6,classes=[0,1,2,3],imgsz=(480,640),verbose=False)
         #print(results[0].names)    
         toc = time.time()
         #print(f"predict time {toc - tic}")    

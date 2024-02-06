@@ -28,9 +28,10 @@ class TrackingNode(Node):
     def __init__(self):
         super().__init__('object_tracking_node')
         # Subscribe to necessary topics
+        self.target_subscriber = self.create_subscription(Int32, '/object_detection/tracking_target_id', self.target_id_callback, 10)
         self.image_subscriber = self.create_subscription(Image, '/ktg_gimbal/image_raw', self.image_callback, 10)
         self.enable_subscriber = self.create_subscription(Bool, '/object_detection/tracking_enable', self.enable_callback, 10)
-        self.target_subscriber = self.create_subscription(Int32, '/object_detection/tracking_target_id', self.target_id_callback, 10)
+        
         # Publisher for the deviation 
         self.deviation_publisher = self.create_publisher(TrackingUpdate, '/object_detection/target_deviation', 10)
         self.box_publisher = self.create_publisher(ObjectDetections, '/object_detection/detections', 10) # bytes array is not working yet
@@ -58,10 +59,10 @@ class TrackingNode(Node):
             self.get_logger().warn(f'Pytorch has no cuda support, please reinstall')
 
         # Get the directory where your package is installed
-        package_dir = get_package_share_directory('object_detection_avix')
+        #package_dir = get_package_share_directory('object_detection_avix')
         
         # Construct the full path to the .engine file
-        engine_path = os.path.join(package_dir, 'yolov8n.engine')
+        #engine_path = os.path.join(package_dir, 'yolov8n.engine')
 
         self.get_logger().info(f'Initializing Model...')
 
@@ -79,6 +80,8 @@ class TrackingNode(Node):
 
         self.initializing = False
         # node created
+        self.detection = ObjectDetection()
+        self.objects_data = ObjectDetections()
         self.get_logger().info(f'Object Detection Node created')
 
 
@@ -113,7 +116,7 @@ class TrackingNode(Node):
         
         results = self.result.track(cv_image)
         # Prepare the objects' data
-        objects_data = ObjectDetections()
+        
         num_detections = 0
         # analyze the results
         # if it is following object
@@ -131,18 +134,17 @@ class TrackingNode(Node):
             x1,y1,x2,y2=tlbr[0],tlbr[1],tlbr[2],tlbr[3]
             if(id  == self.target_id):
                 self.follow((x2+x1)/2,(y2+y1)/2)
-            detection = ObjectDetection()
-            detection.id = id  # Assign the detection ID
-            detection.bbox = tlbr  # Replace with actual bbox coordinates
-            detection.class_type = c  # Replace with actual class type
-            detection.confidence = float(0)  # Replace with actual confidence
+            self.detection.id = id  # Assign the detection ID
+            self.detection.bbox = tlbr  # Replace with actual bbox coordinates
+            self.detection.class_type = c  # Replace with actual class type
+            self.detection.confidence = float(0)  # Replace with actual confidence
             num_detections +=1
-            objects_data.detections.append(detection)
+            self.objects_data.detections.append(self.detection)
 
 
         #self.get_logger().info(f'object data: {objects_data}')
         if(num_detections>0): 
-            self.box_publisher.publish(objects_data)
+            self.box_publisher.publish(self.objects_data)
             
 
     def follow(self, cx, cy):
