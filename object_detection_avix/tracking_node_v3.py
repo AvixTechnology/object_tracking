@@ -45,10 +45,10 @@ class TrackingNode(Node):
         self.declare_parameter('confidence', 0.6)
         self.confidence = self.get_parameter('confidence').value
 
-        self.declare_parameter('input_width', 640)
+        self.declare_parameter('input_width', 1280)
         self.input_width = self.get_parameter('input_width').value
 
-        self.declare_parameter('input_height', 480)
+        self.declare_parameter('input_height', 736)
         self.input_height = self.get_parameter('input_height').value
 
         self.declare_parameter('target_object', [0])
@@ -80,8 +80,6 @@ class TrackingNode(Node):
 
         self.initializing = False
         # node created
-        self.detection = ObjectDetection()
-        self.objects_data = ObjectDetections()
         self.get_logger().info(f'Object Detection Node created')
 
 
@@ -120,6 +118,9 @@ class TrackingNode(Node):
         num_detections = 0
         # analyze the results
         # if it is following object
+        
+        objects_data = ObjectDetections()
+        
 
         for t in results:
             tlbr = t.tlbr
@@ -129,17 +130,19 @@ class TrackingNode(Node):
             x1,y1,x2,y2=tlbr[0],tlbr[1],tlbr[2],tlbr[3]
             if(id  == self.target_id):
                 self.follow((x2+x1)/2,(y2+y1)/2)
-            self.detection.id = id  # Assign the detection ID
-            self.detection.bbox = tlbr  # Replace with actual bbox coordinates
-            self.detection.class_type = c  # Replace with actual class type
-            self.detection.confidence = float(0)  # Replace with actual confidence
+            #self.get_logger().error(f'{self.detection.id },id: {id}')
+            detection = ObjectDetection()
+            detection.id = id  # Assign the detection ID
+            detection.bbox = tlbr  # Replace with actual bbox coordinates
+            detection.class_type = c  # Replace with actual class type
+            detection.confidence = float(0)  # Replace with actual confidence
             num_detections +=1
-            self.objects_data.detections.append(self.detection)
+            objects_data.detections.append(detection)
 
 
-        #self.get_logger().info(f'object data: {objects_data}')
+        #self.get_logger().info(f'object data: {self.objects_data}')
         if(num_detections>0): 
-            self.box_publisher.publish(self.objects_data)
+            self.box_publisher.publish(objects_data)
             
 
     def follow(self, cx, cy):
