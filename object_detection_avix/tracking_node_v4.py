@@ -128,7 +128,7 @@ class TrackingNode(Node):
             c,  id = int(tcls), int(tid)
             x1,y1,x2,y2=tlbr[0],tlbr[1],tlbr[2],tlbr[3]
             if(id  == self.target_id):
-                self.follow((x2+x1)/2,(y2+y1)/2)
+                self.follow((x2+x1)/2,(y2+y1)/2,x2-x1,y2-y1)
             self.detection.id = id  # Assign the detection ID
             self.detection.bbox = tlbr  # Replace with actual bbox coordinates
             self.detection.class_type = c  # Replace with actual class type
@@ -142,7 +142,7 @@ class TrackingNode(Node):
             self.box_publisher.publish(self.objects_data)
             
 
-    def follow(self, cx, cy):
+    def follow(self, cx, cy,size_x,size_y):
         if(not self.KF_initailized):
             self.initialize_KF(cx,cy)
 
@@ -155,6 +155,8 @@ class TrackingNode(Node):
         deviation.deviation_y = filtered_y-self.input_height/2
         deviation.resolution_x = float(self.input_width)
         deviation.resolution_y = float(self.input_height)
+        deviation.size_x = float(size_x)
+        deviation.size_y = float(size_y)
         self.deviation_publisher.publish(deviation)
 
         self.KF_x.update(cx)
