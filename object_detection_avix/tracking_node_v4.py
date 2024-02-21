@@ -3,7 +3,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool, Int32MultiArray, Float32MultiArray, Int32, ByteMultiArray
 from ultralytics import YOLO
-from avix_msg.msg import TrackingUpdate, ObjectDetection, ObjectDetections
+from avix_msg.msg import TrackingUpdate, ObjectDetection, ObjectDetections, TrackingCommand
 import torch
 import cv2
 import struct
@@ -30,7 +30,7 @@ class TrackingNode(Node):
         # Subscribe to necessary topics
         self.target_subscriber = self.create_subscription(Int32, '/object_detection/tracking_target_id', self.target_id_callback, 10)
         self.image_subscriber = self.create_subscription(Image, '/ktg_gimbal/image_raw', self.image_callback, 10)
-        self.enable_subscriber = self.create_subscription(Bool, '/object_detection/tracking_enable', self.enable_callback, 10)
+        self.enable_subscriber = self.create_subscription(TrackingCommand, '/icp_interface/tracking_cmd', self.enable_callback, 10)
         
         # Publisher for the deviation 
         self.deviation_publisher = self.create_publisher(TrackingUpdate, '/object_detection/target_deviation', 10)
