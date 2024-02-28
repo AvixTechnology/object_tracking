@@ -95,6 +95,19 @@ class ReIDTrack():
             pil,  # Classify tasks default to pil=True
             example=results[0].names
         )
+        for t in online_targets:
+            tlbr = t.tlbr
+            tid = t.track_id
+            tcls = t.cls
+            c,  id = int(tcls), int(tid)
+            label =  ('' if id is None else f'id:{id} ') + results[0].names[c]
+            annotator.box_label(tlbr, label, color=colors(c, True))  
+        
+
+        annotated_frame = annotator.result()
+        annotated_frame = cv2.resize(annotated_frame,(640,384))
+        
+        cv2.imshow("test1",annotated_frame)
         
         return online_targets
 
