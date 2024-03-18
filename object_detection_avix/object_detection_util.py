@@ -58,8 +58,8 @@ class botsortConfig():
         self.with_reid = True
         self.fast_reid_config = r"/home/avix/tracking_modules/BoT-SORT/fast_reid/configs/MOT17/sbs_S50.yml"
         self.fast_reid_weights = r"/home/avix/tracking_modules/BoT-SORT/pretrained/mot17_sbs_S50.pth"
-        self.proximity_thresh = 0.5
-        self.appearance_thresh = 0.25
+        self.proximity_thresh = 0.4
+        self.appearance_thresh = 0.15
 
 class ReIDTrack():
     def __init__(self) -> None:
@@ -67,13 +67,13 @@ class ReIDTrack():
         package_dir = get_package_share_directory('object_detection_avix')
         
         # Construct the full path to the .engine file
-        engine_path = os.path.join(package_dir, 'yolov8n.engine')
+        engine_path = os.path.join(package_dir, 'yolov8s736x1280.engine')
         self.model = YOLO(engine_path,task="detect")
-        self.tracker = BoTSORT(opt, frame_rate=10.0)
+        self.tracker = BoTSORT(opt, frame_rate=30.0)
 
     def track(self,frame):
         tic = time.time()
-        results = self.model.predict(source = frame ,conf=0.6,classes=[0,1,2,3],imgsz=(480,640),verbose=False)
+        results = self.model.predict(source = frame ,conf=0.6,classes=[0,1,2,3],imgsz=(736,1280),verbose=False)
         #print(results[0].names)    
         toc = time.time()
         #print(f"predict time {toc - tic}")    
@@ -108,6 +108,7 @@ class ReIDTrack():
         annotated_frame = cv2.resize(annotated_frame,(640,384))
         
         cv2.imshow("test1",annotated_frame)
+        cv2.waitKey(1)
         
         return online_targets
 

@@ -4,10 +4,11 @@ from sensor_msgs.msg import Image
 from avix_action.action import ObjectDetectionCMD
 from std_msgs.msg import Bool, Int32MultiArray, Float32MultiArray, Int32, ByteMultiArray
 from ultralytics import YOLO
-from avix_msg.msg import TrackingUpdate, MavlinkState, ObjectDetection, ObjectDetections, TrackingCommand, Inf_info, Gimbal_info
+from avix_msg.msg import TrackingUpdate, MavlinkState, ObjectDetection, ObjectDetections, TrackingCommand, InfInfo, GimbalInfo
 import torch
 import cv2
 import struct
+#from object_detection_util import KalmanFilter ,ReIDTrack
 from object_detection_avix.object_detection_util import KalmanFilter ,ReIDTrack
 from cv_bridge import CvBridge, CvBridgeError
 import numpy as np  
@@ -48,7 +49,7 @@ class TrackingNode(Node):
         # self.inf_subscriber = self.create_subscription(Inf_info, '/inf_interface/gps_info', self.gps_inf_callback, 10)
             
         # ktg interface
-        self.gimbal_subscriber = self.create_subscription(Gimbal_info, '/inf_interface/gps_info', self.gimbal_callback, 10)
+        self.gimbal_subscriber = self.create_subscription(GimbalInfo, '/inf_interface/gps_info', self.gimbal_callback, 10)
 
         # avix_mavros interface
         self.mav_subscriber = self.create_subscription(MavlinkState, 'avix_mavros/state', self.gps_mavlink_callback, 10)
@@ -87,13 +88,20 @@ class TrackingNode(Node):
 
         self.get_logger().info(f'Initializing Model...')
 
-        # Initialize your YOLO model
-        self.get_logger().info(f'Model Initialized...')
+        #start up the tensorrt 
+
         
         # Initialize CV bridge
         self.bridge = CvBridge()
 
         self.result=ReIDTrack()
+        # Generate a random image
+        random_image = np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8)
+
+        # Convert the image to bgr8 format
+        random_image_bgr8 = cv2.cvtColor(random_image, cv2.COLOR_RGB2BGR)
+
+        self.result.track(random_image_bgr8)
 
         # initialize the tracking variable
         self.target_id = -1 # for following
@@ -104,6 +112,8 @@ class TrackingNode(Node):
         # state of this system
         self.state_tracking = False
         self.state_following = False
+        # Initialize your YOLO model
+        self.get_logger().info(f'Model Initialized...')
 
         # flag for mq3 (0) or inf(1)
         self.fc_type = 0
@@ -111,6 +121,7 @@ class TrackingNode(Node):
         # node created
         self.detection = ObjectDetection()
         self.objects_data = ObjectDetections()
+
         self.get_logger().info(f'Object Detection Node created')
 
 
@@ -126,7 +137,7 @@ class TrackingNode(Node):
         # Convert ROS Image message to CV2 format and pass it to model
         try:
             # Convert the ROS Image message to a CV2 image
-            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+            cv_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
         except CvBridgeError as e:
             self.get_logger().error(f'Error converting ROS Image to OpenCV: {e}')
             return
@@ -215,8 +226,14 @@ class TrackingNode(Node):
         self.get_logger().info('Changing Status Based on command')
         result = ObjectDetectionCMD.Result()
         tracking_enabled = goal_handle.request.tracking_enabled
-        folloing_enabled = goal_handle.request.following_enabled
-        following_id = goal_handle.request.tracking_id
+        following_enabled = goal_handle.request.following_enabled
+        following_id = goal_handle.request.following_id
+        #self.get_logger().info(f'{self.initializing}')
+        self.get_logger().info(f'{tracking_enabled}')
+        
+        self.get_logger().info(f'follow enabled:{following_enabled}')
+        self.get_logger().info(f'follow id :{following_id}')
+        
 
         if self.initializing:
             self.get_logger().warn(f'Object Detection Model still initializing, please send command later')
@@ -227,14 +244,19 @@ class TrackingNode(Node):
         if tracking_enabled:
             self.state_tracking = True
 
-            if(folloing_enabled):
+            if(following_enabled):
                 self.state_following = True
                 self.target_id = following_id
+                self.get_logger().info(f'id change to {self.target_id} ')
             else:
                 self.state_following = False
                 self.target_id = -1
-
+        self.get_logger().info('Success!!!!...')
         goal_handle.succeed()
+
+        result.tracking_enabled = tracking_enabled
+        result.following_enabled = following_enabled
+        result.following_id = following_id
         result.error_code = 0
 
         return result
@@ -272,57 +294,61 @@ class TrackingNode(Node):
     def find_location(self):
         # Constants
         EARTH_RADIUS = 6371000  # in meters
-        
-        # Step 1: Calculate absolute gimbal orientation
-        abs_gimbal_pitch = self.uav_pitch + self.gimbal_pitch
-        if(self.fc_type == 0):
-            abs_gimbal_yaw = self.uav_yaw + self.gimbal_yaw
-        elif(self.fc_type == 1):
-            abs_gimbal_yaw = self.heading + self.gimbal_yaw
-
-        # With ranging module
-        if(self.ranging_flag):
-            # Step 2: Calculate the distance to the object
-            pitch_radians = math.radians(abs_gimbal_pitch)
-            distance_to_object = self.altitude * math.tan(pitch_radians)
-
-            # Step 3: Calculate the GPS location of the object
-            yaw_radians = math.radians(abs_gimbal_yaw)
-            delta_north = distance_to_object * math.cos(yaw_radians)
-            delta_east = distance_to_object * math.sin(yaw_radians)
-
-            delta_latitude = (delta_north / EARTH_RADIUS) * (180 / math.pi)
-            delta_longitude = (delta_east / EARTH_RADIUS) * (180 / math.pi) / math.cos(math.radians(self.latitude))
-
-            object_latitude = self.latitude + delta_latitude
-            object_longitude = self.longitude + delta_longitude
-            
-            # Calculate the object's altitude
-            object_altitude = self.altitude - (distance_to_object * math.sin(pitch_radians))
-
-        # Without ranging module
-        else:
+        try:
+            # Step 1: Calculate absolute gimbal orientation
+            abs_gimbal_pitch = self.uav_pitch + self.gimbal_pitch
             if(self.fc_type == 0):
-                rel_alt = self.altitude
+                abs_gimbal_yaw = self.uav_yaw + self.gimbal_yaw
             elif(self.fc_type == 1):
-                rel_alt = self.rel_alt
-            
-            # Assuming object is at ground level
-            object_altitude = 0  # Object is at ground level
+                abs_gimbal_yaw = self.heading + self.gimbal_yaw
 
-            # We still need to calculate the object's GPS location as before
-            # Since the object is assumed at ground level, we use rel_alt for calculations
-            # Calculate distance to object assuming the pitch angle points to the horizon
-            distance_to_object = rel_alt * math.tan(math.radians(abs_gimbal_pitch))
-            yaw_radians = math.radians(abs_gimbal_yaw)
-            delta_north = distance_to_object * math.cos(yaw_radians)
-            delta_east = distance_to_object * math.sin(yaw_radians)
+            # With ranging module
+            if(self.ranging_flag):
+                # Step 2: Calculate the distance to the object
+                pitch_radians = math.radians(abs_gimbal_pitch)
+                distance_to_object = self.altitude * math.tan(pitch_radians)
 
-            delta_latitude = (delta_north / EARTH_RADIUS) * (180 / math.pi)
-            delta_longitude = (delta_east / EARTH_RADIUS) * (180 / math.pi) / math.cos(math.radians(self.latitude))
+                # Step 3: Calculate the GPS location of the object
+                yaw_radians = math.radians(abs_gimbal_yaw)
+                delta_north = distance_to_object * math.cos(yaw_radians)
+                delta_east = distance_to_object * math.sin(yaw_radians)
 
-            object_latitude = self.latitude + delta_latitude
-            object_longitude = self.longitude + delta_longitude
+                delta_latitude = (delta_north / EARTH_RADIUS) * (180 / math.pi)
+                delta_longitude = (delta_east / EARTH_RADIUS) * (180 / math.pi) / math.cos(math.radians(self.latitude))
+
+                object_latitude = self.latitude + delta_latitude
+                object_longitude = self.longitude + delta_longitude
+                
+                # Calculate the object's altitude
+                object_altitude = self.altitude - (distance_to_object * math.sin(pitch_radians))
+
+            # Without ranging module
+            else:
+                if(self.fc_type == 0):
+                    rel_alt = self.altitude
+                elif(self.fc_type == 1):
+                    rel_alt = self.rel_alt
+                
+                # Assuming object is at ground level
+                object_altitude = 0  # Object is at ground level
+
+                # We still need to calculate the object's GPS location as before
+                # Since the object is assumed at ground level, we use rel_alt for calculations
+                # Calculate distance to object assuming the pitch angle points to the horizon
+                distance_to_object = rel_alt * math.tan(math.radians(abs_gimbal_pitch))
+                yaw_radians = math.radians(abs_gimbal_yaw)
+                delta_north = distance_to_object * math.cos(yaw_radians)
+                delta_east = distance_to_object * math.sin(yaw_radians)
+
+                delta_latitude = (delta_north / EARTH_RADIUS) * (180 / math.pi)
+                delta_longitude = (delta_east / EARTH_RADIUS) * (180 / math.pi) / math.cos(math.radians(self.latitude))
+
+                object_latitude = self.latitude + delta_latitude
+                object_longitude = self.longitude + delta_longitude
+
+        except AttributeError as e:
+            self.get_logger().warn(f'some property has not been intialized: {e}')
+            return 0,0,0
 
         return object_latitude, object_longitude, object_altitude
 
