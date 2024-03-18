@@ -2,7 +2,7 @@ from setuptools import setup
 import os
 package_name = 'object_detection_avix'
 # Define the path to your engine file
-engine_file = os.path.join(package_name, 'yolov8n.engine')
+engine_file = os.path.join(package_name, 'yolov8s736x1280.engine')
 
 
 setup(
@@ -25,7 +25,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'tracking_node = object_detection_avix.tracking_node_v3:main',
+            'tracking_node = object_detection_avix.tracking_node_v6:main',
         ],
     },
 )

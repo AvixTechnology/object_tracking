@@ -8,7 +8,6 @@ import torch
 import cv2
 import struct
 from object_detection_avix.object_detection_util import KalmanFilter ,ReIDTrack
-import 
 from cv_bridge import CvBridge, CvBridgeError
 import numpy as np  
 
@@ -108,7 +107,7 @@ class TrackingNode(Node):
         if width != self.input_width or height != self.input_height:
             # resize the image
             self.get_logger().warn(
-              #  f"Received image of dimensions ({width}, {height}), which does not match expected dimensions ({self.input_width}, {self.input_height}). Resizing image.")
+                f"Received image of dimensions ({width}, {height}), which does not match expected dimensions ({self.input_width}, {self.input_height}). Resizing image.")
             cv_image = cv2.resize(cv_image, (self.input_width, self.input_height))
 
         # do the tracking
