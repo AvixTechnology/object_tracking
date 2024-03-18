@@ -3,7 +3,6 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from avix_action.action import ObjectDetectionCMD
 from std_msgs.msg import Bool, Int32MultiArray, Float32MultiArray, Int32, ByteMultiArray
-from ultralytics import YOLO
 from avix_msg.msg import TrackingUpdate, ObjectDetection, ObjectDetections, TrackingCommand
 import torch
 import cv2
@@ -40,7 +39,7 @@ class TrackingNode(Node):
         self.cmd_action_server =  ActionServer(
             self,
             ObjectDetectionCMD,
-            'object_detection/cmd',
+            '/object_detection/cmd',
             self.command_callback)
 
         # Publisher for the deviation 
@@ -82,7 +81,7 @@ class TrackingNode(Node):
         # Initialize CV bridge
         self.bridge = CvBridge()
 
-        self.result=ReIDTrack()
+        self.reid_track_model=ReIDTrack()
 
         # initialize the tracking variable
         self.target_id = -1 # for following
@@ -95,8 +94,6 @@ class TrackingNode(Node):
         self.state_following = False
 
         # node created
-        self.detection = ObjectDetection()
-        self.objects_data = ObjectDetections()
         self.get_logger().info(f'Object Detection Node created')
 
 
@@ -127,14 +124,18 @@ class TrackingNode(Node):
 
         # do the tracking
         
-        results = self.result.track(cv_image)
+        results = self.reid_track_model.track(cv_image)
         # Prepare the objects' data
         
         num_detections = 0
         # analyze the results
         # if it is following object
 
+        
+        objects_data = ObjectDetections()
+
         for t in results:
+            detection = ObjectDetection()
             tlbr = t.tlbr
             tid = t.track_id
             tcls = t.cls
@@ -142,17 +143,18 @@ class TrackingNode(Node):
             x1,y1,x2,y2=tlbr[0],tlbr[1],tlbr[2],tlbr[3]
             if(id  == self.target_id and self.state_following):
                 self.follow((x2+x1)/2,(y2+y1)/2,x2-x1,y2-y1)
-            self.detection.id = id  # Assign the detection ID
-            self.detection.bbox = tlbr  # Replace with actual bbox coordinates
-            self.detection.class_type = c  # Replace with actual class type
-            self.detection.confidence = float(0)  # Replace with actual confidence
+            detection.id = id  # Assign the detection ID
+            detection.bbox = tlbr  # Replace with actual bbox coordinates
+            detection.class_type = c  # Replace with actual class type
+            detection.confidence = float(0)  # Replace with actual confidence
             num_detections +=1
-            self.objects_data.detections.append(self.detection)
+            objects_data.detections.append(detection)
 
 
         #self.get_logger().info(f'object data: {objects_data}')
         if(num_detections>0): 
-            self.box_publisher.publish(self.objects_data)
+            objects_data.num_detections = num_detections
+            self.box_publisher.publish(objects_data)
             
 
     def follow(self, cx, cy,size_x,size_y):
@@ -197,7 +199,6 @@ class TrackingNode(Node):
 
         if self.initializing:
             self.get_logger().warn(f'Object Detection Model still initializing, please send command later')
-            goal_handle.abort()
             result.error_code = 1
             return result
         
@@ -205,8 +206,15 @@ class TrackingNode(Node):
             self.state_tracking = True
 
             if(folloing_enabled):
-                self.state_following = True
-                self.target_id = following_id
+                if(following_id <0):
+                    # invalid following id
+                    self.state_following = False
+                    self.target_id = -1
+                    result.error_code = 2
+                    return result
+                else:
+                    self.state_following = True
+                    self.target_id = following_id
             else:
                 self.state_following = False
                 self.target_id = -1
