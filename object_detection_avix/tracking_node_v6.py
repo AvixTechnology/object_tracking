@@ -49,7 +49,7 @@ class TrackingNode(Node):
         # self.inf_subscriber = self.create_subscription(Inf_info, '/inf_interface/gps_info', self.gps_inf_callback, 10)
             
         # ktg interface
-        self.gimbal_subscriber = self.create_subscription(GimbalInfo, '/inf_interface/gps_info', self.gimbal_callback, 10)
+        self.gimbal_subscriber = self.create_subscription(GimbalInfo, '/gimbal/info', self.gimbal_callback, 10)
 
         # avix_mavros interface
         self.mav_subscriber = self.create_subscription(MavlinkState, 'avix_mavros/state', self.gps_mavlink_callback, 10)
@@ -122,6 +122,7 @@ class TrackingNode(Node):
         self.detection = ObjectDetection()
         self.objects_data = ObjectDetections()
 
+        
         self.get_logger().info(f'Object Detection Node created')
 
 
@@ -268,6 +269,7 @@ class TrackingNode(Node):
         self.gimbal_pitch = msg.pitch_angle
         self.gimbal_yaw = msg.yaw_angle
         self.ranging_flag = msg.ranging_flag
+        self.target_distance =msg.target_distance
 
     def gps_mavlink_callback(self, msg):
         self.gps_mavlink_info = msg
@@ -278,6 +280,8 @@ class TrackingNode(Node):
         self.altitude = msg.altitude
         self.rel_alt = msg.relative_altitude
         self.heading = msg.heading
+        self.uav_pitch = msg.pitch
+        self.uav_roll = msg.roll
 
     def gps_inf_callback(self,msg):
         self.gps_inf_info = msg
@@ -289,7 +293,7 @@ class TrackingNode(Node):
 
         self.uav_roll = msg.roll
         self.uav_pitch = msg.pitch
-        self.uav_yaw = msg.yaw
+        self.headng = msg.yaw
 
     def find_location(self):
         # Constants
@@ -297,16 +301,15 @@ class TrackingNode(Node):
         try:
             # Step 1: Calculate absolute gimbal orientation
             abs_gimbal_pitch = self.uav_pitch + self.gimbal_pitch
-            if(self.fc_type == 0):
-                abs_gimbal_yaw = self.uav_yaw + self.gimbal_yaw
-            elif(self.fc_type == 1):
-                abs_gimbal_yaw = self.heading + self.gimbal_yaw
-
+            abs_gimbal_yaw = self.heading + self.gimbal_yaw
+            # self.ranging_flag=False
             # With ranging module
             if(self.ranging_flag):
                 # Step 2: Calculate the distance to the object
                 pitch_radians = math.radians(abs_gimbal_pitch)
-                distance_to_object = self.altitude * math.tan(pitch_radians)
+                distance_to_object =  self.target_distance 
+
+                self.get_logger().info(f'distance:  {distance_to_object} ')
 
                 # Step 3: Calculate the GPS location of the object
                 yaw_radians = math.radians(abs_gimbal_yaw)
