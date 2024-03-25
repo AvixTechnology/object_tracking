@@ -45,9 +45,9 @@ class botsortConfig():
         self.hide_labels_name = False
         self.default_parameters = False
         self.save_frames = False
-        self.track_high_thresh = 0.5
-        self.track_low_thresh = 0.1
-        self.new_track_thresh = 0.6
+        self.track_high_thresh = 0.7
+        self.track_low_thresh = 0.4
+        self.new_track_thresh = 0.3
         self.track_buffer = 30
         self.match_thresh = 0.8
         self.aspect_ratio_thresh = 1.6
@@ -73,7 +73,7 @@ class ReIDTrack():
 
     def track(self,frame):
         tic = time.time()
-        results = self.model.predict(source = frame ,conf=0.6,classes=[0,1,2,3],imgsz=(736,1280),verbose=False)
+        results = self.model.predict(source = frame ,conf=0.3,classes=[0,1,2,3],imgsz=(736,1280),verbose=False)
         #print(results[0].names)    
         toc = time.time()
         #print(f"predict time {toc - tic}")    

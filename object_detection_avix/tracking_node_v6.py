@@ -64,13 +64,13 @@ class TrackingNode(Node):
         # self.declare_parameter('tracking_enabled', False)
         #self.tracking_enabled = self.get_parameter('tracking_enabled').value
 
-        self.declare_parameter('confidence', 0.6)
+        self.declare_parameter('confidence', 0.3)
         self.confidence = self.get_parameter('confidence').value
 
-        self.declare_parameter('input_width', 640)
+        self.declare_parameter('input_width', 1280)
         self.input_width = self.get_parameter('input_width').value
 
-        self.declare_parameter('input_height', 480)
+        self.declare_parameter('input_height', 736)
         self.input_height = self.get_parameter('input_height').value
 
         self.declare_parameter('target_object', [0])
@@ -96,7 +96,7 @@ class TrackingNode(Node):
 
         self.result=ReIDTrack()
         # Generate a random image
-        random_image = np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8)
+        random_image = np.random.randint(0, 256, (736, 1280, 3), dtype=np.uint8)
 
         # Convert the image to bgr8 format
         random_image_bgr8 = cv2.cvtColor(random_image, cv2.COLOR_RGB2BGR)
@@ -159,8 +159,11 @@ class TrackingNode(Node):
         num_detections = 0
         # analyze the results
         # if it is following object
+        
+        self.objects_data = ObjectDetections()
 
         for t in results:
+            self.detection = ObjectDetection()
             tlbr = t.tlbr
             tid = t.track_id
             tcls = t.cls
@@ -177,12 +180,19 @@ class TrackingNode(Node):
                     deduced_long, deduced_lat, deduced_alt = self.find_location() # next we need to use the angle to deduce the right one
                     #print it out
                     self.get_logger().info(f'GPS: {deduced_long},{deduced_lat},{deduced_alt}')
+                else:
+                    deduced_long, deduced_lat, deduced_alt = 1.0,1.0,1.0
+            else:
+                deduced_long, deduced_lat, deduced_alt = 0.0,0.0,0.0
+
             self.detection.id = id  # Assign the detection ID
             self.detection.bbox = tlbr  # Replace with actual bbox coordinates
             self.detection.class_type = c  # Replace with actual class type
             self.detection.confidence = float(0)  # Replace with actual confidence
             num_detections +=1
+
             self.objects_data.detections.append(self.detection)
+            
 
 
         #self.get_logger().info(f'object data: {objects_data}')
@@ -353,7 +363,7 @@ class TrackingNode(Node):
             self.get_logger().warn(f'some property has not been intialized: {e}')
             return 0,0,0
 
-        return object_latitude, object_longitude, object_altitude
+        return object_latitude, object_longitude, object_altitude/1.0
 
         
 
