@@ -1,3 +1,43 @@
+"""
+TrackingNode is designed for object tracking and localization within a robotic system, 
+leveraging data fusion from multiple sensors. It subscribes to image streams, gimbal state, GPS data, and tracking commands, 
+processing this information to maintain a lock on designated targets identified by an object detection model. The node utilizes 
+the YOLO object detection algorithm for identifying targets within visual data, enhanced with Kalman Filtering and ReID (Re-Identification) 
+tracking for improved precision and stability in tracking movements. Additionally, it computes target localization by translating 
+visual tracking data into GPS coordinates, using the platform's gimbal orientation and GPS state to estimate the target's position.
+
+The node is designed to interface with various components of a UAV or robotic platform, including:
+- Image data from a gimbal-mounted camera for object detection and tracking.
+- Gimbal orientation data for accurate target angle estimation.
+- GPS data from the platform for calculating the target's geolocation.
+- Custom action servers for receiving tracking and following commands, allowing for dynamic control over the tracking process.
+
+Features include:
+- Subscription to ROS topics for real-time image data, gimbal info, and platform state.
+- Action server implementation for processing object detection and following commands.
+- Integration of the YOLO model for object detection, supported by Kalman Filtering and ReID tracking for robust target tracking.
+- Calculation of target GPS coordinates from visual data, utilizing the platform's orientation and position.
+- Publication of tracking updates, including target deviation and detected objects' information, for further processing or control actions.
+
+This node is a crucial component for applications requiring autonomous tracking and localization capabilities, such as search and rescue, surveillance, 
+and target following, providing a versatile and reliable solution for integrating complex sensor data into actionable insights.
+
+Dependencies:
+- ROS 2 (Robot Operating System)
+- OpenCV for image processing
+- PyTorch and ultralytics YOLO for object detection
+- CvBridge for converting between ROS image messages and OpenCV images
+- NumPy for numerical computations
+- Avix related package: avix_msg, avix_action
+
+Current Updates:
+- 0.6.1: Following required system (GPS)
+
+Author: Hsinhua Lu
+Date: 2024/4/7
+Version: 0.6.1
+"""
+
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
@@ -14,9 +54,6 @@ from cv_bridge import CvBridge, CvBridgeError
 import numpy as np  
 from rclpy.action import ActionServer
 import math
-
-# tracking node v5
-# 1. will have icp control state (to do different thing)
 
 
 
