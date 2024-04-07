@@ -86,7 +86,7 @@ class TrackingNode(Node):
         # self.inf_subscriber = self.create_subscription(Inf_info, '/inf_interface/gps_info', self.gps_inf_callback, 10)
             
         # ktg interface
-        self.gimbal_subscriber = self.create_subscription(GimbalInfo, '/inf_interface/gps_info', self.gimbal_callback, 10)
+        self.gimbal_subscriber = self.create_subscription(GimbalInfo, '/gimbal/info', self.gimbal_callback, 10)
 
         # avix_mavros interface
         self.mav_subscriber = self.create_subscription(MavlinkState, 'avix_mavros/state', self.gps_mavlink_callback, 10)
@@ -101,13 +101,13 @@ class TrackingNode(Node):
         # self.declare_parameter('tracking_enabled', False)
         #self.tracking_enabled = self.get_parameter('tracking_enabled').value
 
-        self.declare_parameter('confidence', 0.6)
+        self.declare_parameter('confidence', 0.3)
         self.confidence = self.get_parameter('confidence').value
 
-        self.declare_parameter('input_width', 640)
+        self.declare_parameter('input_width', 1280)
         self.input_width = self.get_parameter('input_width').value
 
-        self.declare_parameter('input_height', 480)
+        self.declare_parameter('input_height', 736)
         self.input_height = self.get_parameter('input_height').value
 
         self.declare_parameter('target_object', [0])
@@ -133,7 +133,7 @@ class TrackingNode(Node):
 
         self.result=ReIDTrack()
         # Generate a random image
-        random_image = np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8)
+        random_image = np.random.randint(0, 256, (736, 1280, 3), dtype=np.uint8)
 
         # Convert the image to bgr8 format
         random_image_bgr8 = cv2.cvtColor(random_image, cv2.COLOR_RGB2BGR)
@@ -159,6 +159,7 @@ class TrackingNode(Node):
         self.detection = ObjectDetection()
         self.objects_data = ObjectDetections()
 
+        
         self.get_logger().info(f'Object Detection Node created')
 
 
@@ -195,8 +196,11 @@ class TrackingNode(Node):
         num_detections = 0
         # analyze the results
         # if it is following object
+        
+        self.objects_data = ObjectDetections()
 
         for t in results:
+            self.detection = ObjectDetection()
             tlbr = t.tlbr
             tid = t.track_id
             tcls = t.cls
@@ -227,7 +231,9 @@ class TrackingNode(Node):
             self.detection.class_type = c  # Replace with actual class type
             self.detection.confidence = float(0)  # Replace with actual confidence
             num_detections +=1
+
             self.objects_data.detections.append(self.detection)
+            
 
 
         #self.get_logger().info(f'object data: {objects_data}')
@@ -314,6 +320,7 @@ class TrackingNode(Node):
         self.gimbal_pitch = msg.pitch_angle
         self.gimbal_yaw = msg.yaw_angle
         self.ranging_flag = msg.ranging_flag
+        self.target_distance =msg.target_distance
 
     def gps_mavlink_callback(self, msg):
         self.gps_mavlink_info = msg
@@ -324,6 +331,8 @@ class TrackingNode(Node):
         self.altitude = msg.altitude
         self.rel_alt = msg.relative_altitude
         self.heading = msg.heading
+        self.uav_pitch = msg.pitch
+        self.uav_roll = msg.roll
 
     def gps_inf_callback(self,msg):
         self.gps_inf_info = msg
@@ -335,7 +344,7 @@ class TrackingNode(Node):
 
         self.uav_roll = msg.roll
         self.uav_pitch = msg.pitch
-        self.uav_yaw = msg.yaw
+        self.headng = msg.yaw
 
     def find_location(self):
         # Constants
@@ -343,16 +352,15 @@ class TrackingNode(Node):
         try:
             # Step 1: Calculate absolute gimbal orientation
             abs_gimbal_pitch = self.uav_pitch + self.gimbal_pitch
-            if(self.fc_type == 0):
-                abs_gimbal_yaw = self.uav_yaw + self.gimbal_yaw
-            elif(self.fc_type == 1):
-                abs_gimbal_yaw = self.heading + self.gimbal_yaw
-
+            abs_gimbal_yaw = self.heading + self.gimbal_yaw
+            # self.ranging_flag=False
             # With ranging module
             if(self.ranging_flag):
                 # Step 2: Calculate the distance to the object
                 pitch_radians = math.radians(abs_gimbal_pitch)
-                distance_to_object = self.altitude * math.tan(pitch_radians)
+                distance_to_object =  self.target_distance 
+
+                self.get_logger().info(f'distance:  {distance_to_object} ')
 
                 # Step 3: Calculate the GPS location of the object
                 yaw_radians = math.radians(abs_gimbal_yaw)
@@ -396,7 +404,7 @@ class TrackingNode(Node):
             self.get_logger().warn(f'some property has not been intialized: {e}')
             return 0,0,0
 
-        return object_latitude, object_longitude, object_altitude
+        return object_latitude, object_longitude, object_altitude/1.0
 
         
 
