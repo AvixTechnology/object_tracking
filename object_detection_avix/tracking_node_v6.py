@@ -4,7 +4,7 @@ from sensor_msgs.msg import Image
 from avix_action.action import ObjectDetectionCMD
 from std_msgs.msg import Bool, Int32MultiArray, Float32MultiArray, Int32, ByteMultiArray
 from ultralytics import YOLO
-from avix_msg.msg import TrackingUpdate, MavlinkState, ObjectDetection, ObjectDetections, TrackingCommand, InfInfo, GimbalInfo
+from avix_msg.msg import TrackingUpdate, MavlinkState, ObjectDetection, ObjectDetections,TargetGPS, TrackingCommand, InfInfo, GimbalInfo
 import torch
 import cv2
 import struct
@@ -57,7 +57,7 @@ class TrackingNode(Node):
         # Publisher for the deviation 
         self.deviation_publisher = self.create_publisher(TrackingUpdate, '/object_detection/target_deviation', 10)
         self.box_publisher = self.create_publisher(ObjectDetections, '/object_detection/detections', 10) # bytes array is not working yet
-       
+        self.targetGPS_publisher = self.create_publisher(TargetGPS, '/object_detection/target_gps', 10)
         self.initializing = True
 
         # initialize the parameter
@@ -176,6 +176,15 @@ class TrackingNode(Node):
                     deduced_long, deduced_lat, deduced_alt = self.find_location() # next we need to use the angle to deduce the right one
                     #print it out
                     self.get_logger().info(f'GPS: {deduced_long},{deduced_lat},{deduced_alt}')
+                    gps_msg = TargetGPS()
+                    gps_msg.target_longitude = deduced_long
+                    gps_msg.target_latitude = deduced_lat
+                    gps_msg.target_altitude = deduced_alt
+                    gps_msg.estimate_source = self.ranging_flag
+
+                    #TODO a kalman filter here could suit the requirement, but first need to study the fluctuation
+                    self.targetGPS_publisher.publish(gps_msg)
+
             self.detection.id = id  # Assign the detection ID
             self.detection.bbox = tlbr  # Replace with actual bbox coordinates
             self.detection.class_type = c  # Replace with actual class type
