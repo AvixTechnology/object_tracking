@@ -7,6 +7,7 @@ from ultralytics.utils.plotting import Annotator, colors
 
 import cv2
 import numpy as np
+import pandas as pd
 import time,sys,os
 current_dir = os.path.dirname(os.path.abspath(__file__))
 bot_sort_path = os.path.join(current_dir, 'BoT-SORT')
@@ -37,7 +38,7 @@ class botsortConfig():
         self.classes = [0]
         self.agnostic_nms = False
         self.augment = False
-        self.fp16 = False
+        self.fp16 = True
         self.fuse = False
         self.project = 'runs/track'
         self.name = 'MOT17-01'
@@ -45,21 +46,21 @@ class botsortConfig():
         self.hide_labels_name = False
         self.default_parameters = False
         self.save_frames = False
-        self.track_high_thresh = 0.7
-        self.track_low_thresh = 0.4
-        self.new_track_thresh = 0.3
+        self.track_high_thresh = 0.6
+        self.track_low_thresh = 0.2
+        self.new_track_thresh = 0.8
         self.track_buffer = 30
-        self.match_thresh = 0.8
+        self.match_thresh = 0.9
         self.aspect_ratio_thresh = 1.6
         self.min_box_area = 10
-        self.mot20 = False
+        self.mot20 = True
         self.cmc_method = 'sparseOptFlow'
         self.ablation = False
-        self.with_reid = True
-        self.fast_reid_config = r"/home/avix/tracking_modules/BoT-SORT/fast_reid/configs/MOT17/sbs_S50.yml"
-        self.fast_reid_weights = r"/home/avix/tracking_modules/BoT-SORT/pretrained/mot17_sbs_S50.pth"
-        self.proximity_thresh = 0.4
-        self.appearance_thresh = 0.15
+        self.with_reid = False
+        self.fast_reid_config = r"/home/nvidia/tracking_modules/BoT-SORT/fast_reid/configs/MOT17/sbs_S50.yml"
+        self.fast_reid_weights = r"/home/nvidia/tracking_modules/BoT-SORT/pretrained/mot17_sbs_S50.pth"
+        self.proximity_thresh = 0.003
+        self.appearance_thresh = 0.015
 
 class ReIDTrack():
     def __init__(self) -> None:
@@ -67,26 +68,51 @@ class ReIDTrack():
         package_dir = get_package_share_directory('object_detection_avix')
         
         # Construct the full path to the .engine file
-        engine_path = os.path.join(package_dir, 'yolov8s736x1280.engine')
+        engine_path = os.path.join(package_dir, 'yolov8s_fp16_736x1280.engine')
         self.model = YOLO(engine_path,task="detect")
-        self.tracker = BoTSORT(opt, frame_rate=30.0)
+        self.tracker = BoTSORT(opt, frame_rate=10.0)
+
+        #save csv file 
+        self.yolo_data = []
+        self.BotSort_data = []
+       
+        #recording file
+        # self.yolo_paint_file = open('yolo_paint_results.txt', 'w')
+        # self.yolo_all_file = open('yolo_all_results.txt', 'w')
+        # self.yolo_model_file = open('yolo_model_results.txt', 'w')
+
+        
 
     def track(self,frame):
+        self.yolo_data = []
+        self.BotSort_data = []
         tic = time.time()
         results = self.model.predict(source = frame ,conf=0.3,classes=[0,1,2,3],imgsz=(736,1280),verbose=False)
-        #print(results[0].names)    
+        #print(results[0].boxes)    
         toc = time.time()
-        #print(f"predict time {toc - tic}")    
+        predict_time=toc - tic
+        # print(f"predict time {toc - tic}")    
         boxes = results[0].boxes
+        
 
         bboxes = boxes.xyxy.cpu().numpy()  # Convert tensors to numpy arrays
         scores = boxes.conf.cpu().numpy()
         classes = boxes.cls.cpu().numpy()
+
+        #save yolo data  with bboxes, scores, classes as a csv file 
+        
+        self.yolo_data.append( [predict_time/1.0 , bboxes, scores,  classes])
+       
+
+
         # Constructing the 2D list
         detection_list = np.column_stack((bboxes, scores, classes, np.zeros(len(bboxes))))
         online_targets = self.tracker.update(detection_list,results[0].orig_img)
         toc2 = time.time()
-        #print(f"update time {toc2 - toc}")  
+
+        update_time=toc2-toc
+        # print(f"update time {toc2 - toc}")  
+        
         annotator = Annotator(
             deepcopy(results[0].orig_img),
             line_width,
@@ -95,6 +121,8 @@ class ReIDTrack():
             pil,  # Classify tasks default to pil=True
             example=results[0].names
         )
+        #save the BotSort data as a csv file
+        
         for t in online_targets:
             tlbr = t.tlbr
             tid = t.track_id
@@ -102,15 +130,31 @@ class ReIDTrack():
             c,  id = int(tcls), int(tid)
             label =  ('' if id is None else f'id:{id} ') + results[0].names[c]
             annotator.box_label(tlbr, label, color=colors(c, True))  
-        
+            self.BotSort_data.append([update_time, results[0].names[c], id,  tlbr])
 
-        annotated_frame = annotator.result()
-        annotated_frame = cv2.resize(annotated_frame,(640,384))
+        # annotated_frame = annotator.result()
+        # annotated_frame = cv2.resize(annotated_frame,(640,384))
         
-        cv2.imshow("test1",annotated_frame)
-        cv2.waitKey(1)
+        # cv2.imshow("test1",annotated_frame)
+        # toc3=time.time()
+        # painttime=toc3-toc2
+        # print("paint time: ", toc3-toc2)
+        # cv2.waitKey(1)
         
-        return online_targets
+        # self.Botsort_file.write(str(updatetime)+ ", ")
+        # self.yolo_paint_file.write(str(painttime)+ ", ")
+        # self.yolo_model_file.write(str(predict_time)+ ", ")
+
+        #save BotSort data and yolodata
+        # self.yolo_data_df = pd.DataFrame( self.yolo_data ,columns=['time', 'bboxes', 'scores', 'classes'])
+        # self.BotSort_data_df = pd.DataFrame( self.BotSort_data , columns=['time', 'cls', 'id', 'tlbr'])
+        # self.BotSort_data_df.to_csv('bot_sort_results.csv', index=False)
+        # self.yolo_data_df.to_csv('yolo_results.csv', index=False)
+        # toc3=time.time()
+        # print("all time :", toc3 - tic )
+        
+        
+        return online_targets ,self.yolo_data ,self.BotSort_data
 
 
 class KalmanFilter(object):

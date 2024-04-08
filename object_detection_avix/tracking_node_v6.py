@@ -4,7 +4,7 @@ from sensor_msgs.msg import Image
 from avix_action.action import ObjectDetectionCMD
 from std_msgs.msg import Bool, Int32MultiArray, Float32MultiArray, Int32, ByteMultiArray
 from ultralytics import YOLO
-from avix_msg.msg import TrackingUpdate, MavlinkState, ObjectDetection, ObjectDetections, TrackingCommand, InfInfo, GimbalInfo
+from avix_msg.msg import TrackingUpdate, MavlinkState, ObjectDetection, Yolodata,BotSortdata, ObjectDetections, TrackingCommand, InfInfo, GimbalInfo
 import torch
 import cv2
 import struct
@@ -14,6 +14,7 @@ from cv_bridge import CvBridge, CvBridgeError
 import numpy as np  
 from rclpy.action import ActionServer
 import math
+import time 
 
 # tracking node v5
 # 1. will have icp control state (to do different thing)
@@ -70,7 +71,7 @@ class TrackingNode(Node):
         self.declare_parameter('input_width', 1280)
         self.input_width = self.get_parameter('input_width').value
 
-        self.declare_parameter('input_height', 736)
+        self.declare_parameter('input_height', 720)
         self.input_height = self.get_parameter('input_height').value
 
         self.declare_parameter('target_object', [0])
@@ -96,7 +97,7 @@ class TrackingNode(Node):
 
         self.result=ReIDTrack()
         # Generate a random image
-        random_image = np.random.randint(0, 256, (736, 1280, 3), dtype=np.uint8)
+        random_image = np.random.randint(0, 256, (720, 1280, 3), dtype=np.uint8)
 
         # Convert the image to bgr8 format
         random_image_bgr8 = cv2.cvtColor(random_image, cv2.COLOR_RGB2BGR)
@@ -122,11 +123,16 @@ class TrackingNode(Node):
         self.detection = ObjectDetection()
         self.objects_data = ObjectDetections()
 
+        # for recording
+        # self.track_file = open('track_results.txt', 'w')
+        self.frame_count = 0
+
         
         self.get_logger().info(f'Object Detection Node created')
 
 
     def image_callback(self, msg):
+        start =time.time()
         # not run the model if not initialized
         if self.initializing:
             return
@@ -142,24 +148,27 @@ class TrackingNode(Node):
         except CvBridgeError as e:
             self.get_logger().error(f'Error converting ROS Image to OpenCV: {e}')
             return
-        
+        # readtime=time.time()
+        # print("readtime: ", readtime-start)
         # Check the size of the image
         height, width = cv_image.shape[:2]
         if width != self.input_width or height != self.input_height:
             # resize the image
-            #self.get_logger().warn(
-              #  f"Received image of dimensions ({width}, {height}), which does not match expected dimensions ({self.input_width}, {self.input_height}). Resizing image.")
+            self.get_logger().warn(
+               f"Received image of dimensions ({width}, {height}), which does not match expected dimensions ({self.input_width}, {self.input_height}). Resizing image.")
             cv_image = cv2.resize(cv_image, (self.input_width, self.input_height))
 
         # do the tracking
         
-        results = self.result.track(cv_image)
+        results , yolodata, Botsortdata = self.result.track(cv_image)
         # Prepare the objects' data
-        
+
         num_detections = 0
         # analyze the results
         # if it is following object
-        
+
+        # track_time =time.time()
+        # print("tracktime: " , track_time-readtime)
         self.objects_data = ObjectDetections()
 
         for t in results:
@@ -192,12 +201,46 @@ class TrackingNode(Node):
             num_detections +=1
 
             self.objects_data.detections.append(self.detection)
+
+            
+        print (yolodata)
+        print(Botsortdata)
+        self.frame_count += 1
+        for i in range(len(yolodata[0][1])): 
+            self.yolo_data= Yolodata()
+            self.yolo_data.frameth=self.frame_count
+            self.yolo_data.spendtime = yolodata[0][0]
+            self.yolo_data.bbox = yolodata[0][1][i] # TODO check bbox type 
+            self.yolo_data.score = float(yolodata[0][2][i])
+            self.yolo_data.class_type = int(yolodata[0][3][i])
+            self.objects_data.yolo_data.append(self.yolo_data)
+
+
+        for j in range(len(Botsortdata)):
+            self.botsort_data = BotSortdata()
+            self.botsort_data.frameth=self.frame_count
+            self.botsort_data.spendtime = Botsortdata[j][0]
+            self.botsort_data.class_type = Botsortdata[j][1]
+            self.botsort_data.id = Botsortdata[j][2]
+            self.botsort_data.bbox = Botsortdata[j][3]
+            self.objects_data.botsort_data.append(self.botsort_data) # TODO check bbox type 
+
+
             
 
 
         #self.get_logger().info(f'object data: {objects_data}')
         if(num_detections>0): 
             self.box_publisher.publish(self.objects_data)
+
+
+        end =time.time()
+        # print("calculate time:", end -track_time)
+        # self.get_logger().info(f"all time : { end - start} ")
+        #record the time
+        # finish_time=time.time()
+        # spend_time = finish_time - track_time
+        # self.track_file.write(str(spend_time)+ ", ")
             
 
     def follow(self, cx, cy,size_x,size_y):
