@@ -1,10 +1,50 @@
+"""
+TrackingNode is designed for object tracking and localization within a robotic system, 
+leveraging data fusion from multiple sensors. It subscribes to image streams, gimbal state, GPS data, and tracking commands, 
+processing this information to maintain a lock on designated targets identified by an object detection model. The node utilizes 
+the YOLO object detection algorithm for identifying targets within visual data, enhanced with Kalman Filtering and ReID (Re-Identification) 
+tracking for improved precision and stability in tracking movements. Additionally, it computes target localization by translating 
+visual tracking data into GPS coordinates, using the platform's gimbal orientation and GPS state to estimate the target's position.
+
+The node is designed to interface with various components of a UAV or robotic platform, including:
+- Image data from a gimbal-mounted camera for object detection and tracking.
+- Gimbal orientation data for accurate target angle estimation.
+- GPS data from the platform for calculating the target's geolocation.
+- Custom action servers for receiving tracking and following commands, allowing for dynamic control over the tracking process.
+
+Features include:
+- Subscription to ROS topics for real-time image data, gimbal info, and platform state.
+- Action server implementation for processing object detection and following commands.
+- Integration of the YOLO model for object detection, supported by Kalman Filtering and ReID tracking for robust target tracking.
+- Calculation of target GPS coordinates from visual data, utilizing the platform's orientation and position.
+- Publication of tracking updates, including target deviation and detected objects' information, for further processing or control actions.
+
+This node is a crucial component for applications requiring autonomous tracking and localization capabilities, such as search and rescue, surveillance, 
+and target following, providing a versatile and reliable solution for integrating complex sensor data into actionable insights.
+
+Dependencies:
+- ROS 2 (Robot Operating System)
+- OpenCV for image processing
+- PyTorch and ultralytics YOLO for object detection
+- CvBridge for converting between ROS image messages and OpenCV images
+- NumPy for numerical computations
+- Avix related package: avix_msg, avix_action
+
+Current Updates:
+- 0.6.1: Following required system (GPS)
+
+Author: Hsinhua Lu
+Date: 2024/4/7
+Version: 0.6.1
+"""
+
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from avix_action.action import ObjectDetectionCMD
 from std_msgs.msg import Bool, Int32MultiArray, Float32MultiArray, Int32, ByteMultiArray
 from ultralytics import YOLO
-from avix_msg.msg import TrackingUpdate, MavlinkState, ObjectDetection, Yolodata,BotSortdata, ObjectDetections, TrackingCommand, InfInfo, GimbalInfo
+from avix_msg.msg import TrackingUpdate, MavlinkState, ObjectDetection, Yolodata, BotSortdata, ObjectDetections, TargetGPS, TrackingCommand, InfInfo, GimbalInfo
 import torch
 import cv2
 import struct
@@ -15,9 +55,6 @@ import numpy as np
 from rclpy.action import ActionServer
 import math
 import time 
-
-# tracking node v5
-# 1. will have icp control state (to do different thing)
 
 
 
@@ -58,7 +95,7 @@ class TrackingNode(Node):
         # Publisher for the deviation 
         self.deviation_publisher = self.create_publisher(TrackingUpdate, '/object_detection/target_deviation', 10)
         self.box_publisher = self.create_publisher(ObjectDetections, '/object_detection/detections', 10) # bytes array is not working yet
-       
+        self.targetGPS_publisher = self.create_publisher(TargetGPS, '/object_detection/target_gps', 10)
         self.initializing = True
 
         # initialize the parameter
@@ -189,10 +226,14 @@ class TrackingNode(Node):
                     deduced_long, deduced_lat, deduced_alt = self.find_location() # next we need to use the angle to deduce the right one
                     #print it out
                     self.get_logger().info(f'GPS: {deduced_long},{deduced_lat},{deduced_alt}')
-                else:
-                    deduced_long, deduced_lat, deduced_alt = 1.0,1.0,1.0
-            else:
-                deduced_long, deduced_lat, deduced_alt = 0.0,0.0,0.0
+                    gps_msg = TargetGPS()
+                    gps_msg.target_longitude = deduced_long
+                    gps_msg.target_latitude = deduced_lat
+                    gps_msg.target_altitude = deduced_alt
+                    gps_msg.estimate_source = self.ranging_flag
+
+                    #TODO a kalman filter here could suit the requirement, but first need to study the fluctuation
+                    self.targetGPS_publisher.publish(gps_msg)
 
             self.detection.id = id  # Assign the detection ID
             self.detection.bbox = tlbr  # Replace with actual bbox coordinates
