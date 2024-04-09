@@ -46,9 +46,9 @@ class botsortConfig():
         self.hide_labels_name = False
         self.default_parameters = False
         self.save_frames = False
-        self.track_high_thresh = 0.6
-        self.track_low_thresh = 0.2
-        self.new_track_thresh = 0.8
+        self.track_high_thresh = 0.7
+        self.track_low_thresh = 0.4   
+        self.new_track_thresh = 0.3
         self.track_buffer = 30
         self.match_thresh = 0.9
         self.aspect_ratio_thresh = 1.6
@@ -132,14 +132,14 @@ class ReIDTrack():
             annotator.box_label(tlbr, label, color=colors(c, True))  
             self.BotSort_data.append([update_time, results[0].names[c], id,  tlbr])
 
-        # annotated_frame = annotator.result()
-        # annotated_frame = cv2.resize(annotated_frame,(640,384))
+        annotated_frame = annotator.result()
+        annotated_frame = cv2.resize(annotated_frame,(640,384))
         
-        # cv2.imshow("test1",annotated_frame)
+        cv2.imshow("test1",annotated_frame)
         # toc3=time.time()
         # painttime=toc3-toc2
         # print("paint time: ", toc3-toc2)
-        # cv2.waitKey(1)
+        cv2.waitKey(1)
         
         # self.Botsort_file.write(str(updatetime)+ ", ")
         # self.yolo_paint_file.write(str(painttime)+ ", ")

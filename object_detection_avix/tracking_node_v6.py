@@ -93,7 +93,7 @@ class TrackingNode(Node):
         self.mav_subscriber = self.create_subscription(MavlinkState, 'avix_mavros/state', self.gps_mavlink_callback, 10)
 
         # Publisher for the deviation 
-        self.deviation_publisher = self.create_publisher(TrackingUpdate, '/object_detection/target_deviation', 10)
+        self.deviation_publisher = self.create_publisher(TrackingUpdate, '/object_detection/target_deviation', 1)
         self.box_publisher = self.create_publisher(ObjectDetections, '/object_detection/detections', 10) # bytes array is not working yet
         self.targetGPS_publisher = self.create_publisher(TargetGPS, '/object_detection/target_gps', 10)
         self.initializing = True
@@ -243,28 +243,28 @@ class TrackingNode(Node):
 
             self.objects_data.detections.append(self.detection)
 
-            
-        print (yolodata)
-        print(Botsortdata)
-        self.frame_count += 1
-        for i in range(len(yolodata[0][1])): 
-            self.yolo_data= Yolodata()
-            self.yolo_data.frameth=self.frame_count
-            self.yolo_data.spendtime = yolodata[0][0]
-            self.yolo_data.bbox = yolodata[0][1][i] # TODO check bbox type 
-            self.yolo_data.score = float(yolodata[0][2][i])
-            self.yolo_data.class_type = int(yolodata[0][3][i])
-            self.objects_data.yolo_data.append(self.yolo_data)
+        # save the yolo data and BotSort data
+        # print (yolodata)
+        # print(Botsortdata)
+        # self.frame_count += 1
+        # for i in range(len(yolodata[0][1])): 
+        #     self.yolo_data= Yolodata()
+        #     self.yolo_data.frameth=self.frame_count
+        #     self.yolo_data.spendtime = yolodata[0][0]
+        #     self.yolo_data.bbox = yolodata[0][1][i] # TODO check bbox type 
+        #     self.yolo_data.score = float(yolodata[0][2][i])
+        #     self.yolo_data.class_type = int(yolodata[0][3][i])
+        #     self.objects_data.yolo_data.append(self.yolo_data)
 
 
-        for j in range(len(Botsortdata)):
-            self.botsort_data = BotSortdata()
-            self.botsort_data.frameth=self.frame_count
-            self.botsort_data.spendtime = Botsortdata[j][0]
-            self.botsort_data.class_type = Botsortdata[j][1]
-            self.botsort_data.id = Botsortdata[j][2]
-            self.botsort_data.bbox = Botsortdata[j][3]
-            self.objects_data.botsort_data.append(self.botsort_data) # TODO check bbox type 
+        # for j in range(len(Botsortdata)):
+        #     self.botsort_data = BotSortdata()
+        #     self.botsort_data.frameth=self.frame_count
+        #     self.botsort_data.spendtime = Botsortdata[j][0]
+        #     self.botsort_data.class_type = Botsortdata[j][1]
+        #     self.botsort_data.id = Botsortdata[j][2]
+        #     self.botsort_data.bbox = Botsortdata[j][3]
+        #     self.objects_data.botsort_data.append(self.botsort_data) # TODO check bbox type 
 
 
             
@@ -276,8 +276,8 @@ class TrackingNode(Node):
 
 
         end =time.time()
-        # print("calculate time:", end -track_time)
-        # self.get_logger().info(f"all time : { end - start} ")
+        #print("detection all  time:", end - start)
+        self.get_logger().info(f"all time : { end - start} ")
         #record the time
         # finish_time=time.time()
         # spend_time = finish_time - track_time
@@ -445,7 +445,7 @@ class TrackingNode(Node):
 
         except AttributeError as e:
             self.get_logger().warn(f'some property has not been intialized: {e}')
-            return 0,0,0
+            return 0.0,0.0,0.0
 
         return object_latitude, object_longitude, object_altitude/1.0
 
