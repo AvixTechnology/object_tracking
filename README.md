@@ -107,7 +107,7 @@ cd tracking_modules
 git clone https://github.com/NirAharon/BoT-SORT.git
 ```
 
-### botsort 
+## botsort 
 
 ```
 cd BoT-SORT
@@ -182,6 +182,11 @@ pip3 install 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=Python
 pip3 install cython_bbox
 
 pip install ultralytics
+#tensorrt
+sudo apt install python3-libnvinfer
+#onnx
+pip install onnx0
+
 
 # UPDATE TORCH AND TORCHVISION FOR CUDA
 wget https://developer.download.nvidia.com/compute/redist/jp/v512/pytorch/torch-2.1.0a0+41361538.nv23.06-cp38-cp38-linux_aarch64.whl
@@ -215,7 +220,9 @@ export LD_PRELOAD='/home/avix/avix/tracking_modules/.venv/lib/python3.8/site-pac
 ```
 mkdir pretrained
 ```
+
 https://drive.google.com/file/d/1uSmhXzyV1Zvb4TJJCzpsZOIcw7CCJLxj/view
+
 https://drive.google.com/file/d/1QZFWpoa80rqo7O-HXmlss8J8CnS7IUsN/view
 
 
