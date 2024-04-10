@@ -97,3 +97,125 @@ model = YOLO('yolov8n.pt')
 ```cpp
 yolo export model=yolov8n.pt imgsz=480,640 device=0 format='engine'
 ```
+
+# BotSort 
+## install environment 
+### git clone 
+```
+mkdir tracking_modules
+cd tracking_modules
+git clone https://github.com/NirAharon/BoT-SORT.git
+```
+
+### botsort 
+
+```
+cd BoT-SORT
+pip install wheel
+python3 -m pip install --upgrade setuptools
+```
+
+change the requirements.txt as followed
+```
+numpy
+opencv-python
+loguru
+scikit-image
+scikit-learn
+tqdm
+torchvision>=0.10.0
+Pillow
+thop
+ninja
+tabulate
+tensorboard
+# lap
+motmetrics
+filterpy
+h5py
+matplotlib
+scipy
+prettytable
+# easydict
+tensorboard
+pyyaml
+yacs
+termcolor
+gdown
+# onnx==1.8.1
+# onnxruntime==1.8.0
+# onnx-simplifier==0.3.5
+```
+and then 
+
+```
+pip3 install -r requirements.txt
+pip install lap
+pip install easydict
+pip install cmake
+```
+
+reboot the device!
+```
+reboot
+```
+
+```
+sudo apt-get install libprotoc-dev protobuf-compiler
+#pip install onnx
+#pip install onnxruntime
+pip install onnxsim
+python3 setup.py develop
+```
+### for onnx 
+```
+wget https://nvidia.box.com/shared/static/iizg3ggrtdkqawkmebbfixo7sce6j365.whl -O onnxruntime_gpu-1.16.0-cp38-cp38-linux_aarch64.whl
+pip3 install onnxruntime_gpu-1.16.0-cp38-cp38-linux_aarch64.whl
+```
+
+### other dependency 
+```
+pip3 install cython
+pip3 install 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
+
+# Cython-bbox
+pip3 install cython_bbox
+
+pip install ultralytics
+
+# UPDATE TORCH AND TORCHVISION FOR CUDA
+wget https://developer.download.nvidia.com/compute/redist/jp/v512/pytorch/torch-2.1.0a0+41361538.nv23.06-cp38-cp38-linux_aarch64.whl
+export TORCH_INSTALL=~/torch-2.1.0a0+41361538.nv23.06-cp38-cp38-linux_aarch64.whl
+pip install --no-cache $TORCH_INSTALL
+
+pip uninstall torchvision
+sudo apt-get install libjpeg-dev zlib1g-dev libpython3-dev libopenblas-dev libavcodec-dev libavformat-dev libswscale-dev
+git clone --branch v0.16.0 https://github.com/pytorch/vision torchvision
+cd torchvision
+export BUILD_VERSION=0.16.0
+export MAX_JOBS=1
+export FORCE_CUDA=1
+python3 setup.py install   #會卡住 如果不設置MAX_JOBS
+```
+
+### numpy version check 
+```
+python -m pip uninstall numpy
+python -m pip install numpy==1.23.1
+
+export LD_PRELOAD='/home/avix/avix/tracking_modules/.venv/lib/python3.8/site-packages/scikit_learn.libs/libgomp-d22c30c5.so.1.0.0'
+
+```
+
+
+### Botsort pretrained folder 
+
+#### create the folder in BotSort  and put the file to "pretrained " folder 
+
+```
+mkdir pretrained
+```
+https://drive.google.com/file/d/1uSmhXzyV1Zvb4TJJCzpsZOIcw7CCJLxj/view
+https://drive.google.com/file/d/1QZFWpoa80rqo7O-HXmlss8J8CnS7IUsN/view
+
+
