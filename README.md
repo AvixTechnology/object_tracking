@@ -225,4 +225,25 @@ https://drive.google.com/file/d/1uSmhXzyV1Zvb4TJJCzpsZOIcw7CCJLxj/view
 
 https://drive.google.com/file/d/1QZFWpoa80rqo7O-HXmlss8J8CnS7IUsN/view
 
+# install yolo file 
+
+reference by https://github.com/ultralytics/ultralytics
+
+1. install yolo file on https://github.com/ultralytics/ultralytics
+
+2. translate .pt to .engine
+```python
+from ultralytics import YOLO
+
+# Load a model
+
+model = YOLO("yolov8n.pt")  # load a pretrained model (recommended for training)
+
+#  the model
+path =model.export(format='engine', imgsz=(736,1280), int8=False ,half=False ,device=0, opset=16) # export the m
+```
+
+3.rename the .engine file to opt.engine
+
+4.put the engine file to "object_detection_avix"  folder
 
