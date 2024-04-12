@@ -223,7 +223,7 @@ class TrackingNode(Node):
                  # check if it is within 30% around center
                 if(x_center<self.input_width/2*1.3 and x_center>self.input_width/2*0.7 and y_center<self.input_height/2*1.3 and y_center>self.input_height/2*0.7):
                     #send the gps data
-                    deduced_long, deduced_lat, deduced_alt = self.find_location() # next we need to use the angle to deduce the right one
+                    deduced_lat, deduced_long, deduced_alt = self.find_location() # next we need to use the angle to deduce the right one
                     #print it out
                     self.get_logger().info(f'GPS: {deduced_long},{deduced_lat},{deduced_alt}')
                     gps_msg = TargetGPS()
@@ -277,7 +277,7 @@ class TrackingNode(Node):
 
         end =time.time()
         #print("detection all  time:", end - start)
-        self.get_logger().info(f"all time : { end - start} ")
+        # self.get_logger().info(f"all time : { end - start} ")
         #record the time
         # finish_time=time.time()
         # spend_time = finish_time - track_time
@@ -394,13 +394,13 @@ class TrackingNode(Node):
         EARTH_RADIUS = 6371000  # in meters
         try:
             # Step 1: Calculate absolute gimbal orientation
-            abs_gimbal_pitch = self.uav_pitch + self.gimbal_pitch
+            abs_gimbal_pitch = self.gimbal_pitch
             abs_gimbal_yaw = self.heading + self.gimbal_yaw
-            # self.ranging_flag=False
+            self.ranging_flag=False
             # With ranging module
             if(self.ranging_flag):
                 # Step 2: Calculate the distance to the object
-                pitch_radians = math.radians(abs_gimbal_pitch)
+                pitch_radians = math.radians(-abs_gimbal_pitch)
                 distance_to_object =  self.target_distance 
 
                 self.get_logger().info(f'distance:  {distance_to_object} ')
@@ -428,11 +428,13 @@ class TrackingNode(Node):
                 
                 # Assuming object is at ground level
                 object_altitude = 0  # Object is at ground level
-
+                rel_alt = 1
                 # We still need to calculate the object's GPS location as before
                 # Since the object is assumed at ground level, we use rel_alt for calculations
                 # Calculate distance to object assuming the pitch angle points to the horizon
-                distance_to_object = rel_alt * math.tan(math.radians(abs_gimbal_pitch))
+                
+                distance_to_object = rel_alt / math.tan(math.radians(-abs_gimbal_pitch))
+                self.get_logger().info(f'distance : {distance_to_object}')
                 yaw_radians = math.radians(abs_gimbal_yaw)
                 delta_north = distance_to_object * math.cos(yaw_radians)
                 delta_east = distance_to_object * math.sin(yaw_radians)
