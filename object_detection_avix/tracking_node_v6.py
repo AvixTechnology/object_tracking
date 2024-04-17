@@ -42,9 +42,9 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from avix_action.action import ObjectDetectionCMD
-from std_msgs.msg import Bool, Int32MultiArray, Float32MultiArray, Int32, ByteMultiArray
+from std_msgs.msg import Bool, Int32MultiArray, Float32MultiArray, Int32, ByteMultiArray, Header
 from ultralytics import YOLO
-from avix_msg.msg import TrackingUpdate, MavlinkState, ObjectDetection, Yolodata, BotSortdata, ObjectDetections, TargetGPS, TrackingCommand, InfInfo, GimbalInfo
+from avix_msg.msg import TrackingUpdate, MavlinkState, ObjectDetection, ObjectDetections, TargetGPS, TrackingCommand, InfInfo, GimbalInfo
 import torch
 import cv2
 import struct
@@ -197,7 +197,7 @@ class TrackingNode(Node):
 
         # do the tracking
         
-        results , yolodata, Botsortdata = self.result.track(cv_image)
+        results , _ , _ = self.result.track(cv_image)
         # Prepare the objects' data
 
         num_detections = 0
@@ -299,6 +299,7 @@ class TrackingNode(Node):
         deviation.resolution_y = float(self.input_height)
         deviation.size_x = float(size_x)
         deviation.size_y = float(size_y)
+        deviation.header.stamp = self.get_clock().now().to_msg()
         self.deviation_publisher.publish(deviation)
 
         self.KF_x.update(cx)
