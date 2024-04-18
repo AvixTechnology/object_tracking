@@ -57,8 +57,8 @@ class botsortConfig():
         self.cmc_method = 'sparseOptFlow'
         self.ablation = False
         self.with_reid = False
-        self.fast_reid_config = r"/home/nvidia/tracking_modules/BoT-SORT/fast_reid/configs/MOT17/sbs_S50.yml"
-        self.fast_reid_weights = r"/home/nvidia/tracking_modules/BoT-SORT/pretrained/mot17_sbs_S50.pth"
+        self.fast_reid_config = r"/home/nvidia/inference_dependency/BoT-SORT/fast_reid/configs/MOT17/sbs_S50.yml"
+        self.fast_reid_weights = r"/home/nvidia/inference_dependency/BoT-SORT/pretrained/mot17_sbs_S50.pth"
         self.proximity_thresh = 0.003
         self.appearance_thresh = 0.015
 
@@ -68,7 +68,8 @@ class ReIDTrack():
         package_dir = get_package_share_directory('object_detection_avix')
         
         # Construct the full path to the .engine file
-        engine_path = os.path.join(package_dir, 'yolov8s_fp16_736x1280.engine')
+        #engine_path = os.path.join(package_dir, 'yolov8s_fp16_736x1280.engine')
+        engine_path = os.path.join(package_dir, 'opt.engine')
         self.model = YOLO(engine_path,task="detect")
         self.tracker = BoTSORT(opt, frame_rate=10.0)
 
@@ -87,7 +88,7 @@ class ReIDTrack():
         self.yolo_data = []
         self.BotSort_data = []
         tic = time.time()
-        results = self.model.predict(source = frame ,conf=0.3,classes=[0,1,2,3],imgsz=(736,1280),verbose=False)
+        results = self.model.predict(source = frame ,conf=0.3, classes=[0,1,2,3],imgsz=(736,1280),verbose=False, half = True, device="cuda:0",)
         #print(results[0].boxes)    
         toc = time.time()
         predict_time=toc - tic
@@ -114,7 +115,7 @@ class ReIDTrack():
         # print(f"update time {toc2 - toc}")  
         
         annotator = Annotator(
-            deepcopy(results[0].orig_img),
+        deepcopy(results[0].orig_img),
             line_width,
             font_size,
             font,
