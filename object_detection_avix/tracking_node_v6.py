@@ -225,7 +225,7 @@ class TrackingNode(Node):
                     #send the gps data
                     deduced_lat, deduced_long, deduced_alt = self.find_location() # next we need to use the angle to deduce the right one
                     #print it out
-                    self.get_logger().info(f'GPS: {deduced_long},{deduced_lat},{deduced_alt}')
+                    self.get_logger().info(f'deduced GPS: {deduced_long},{deduced_lat},{deduced_alt}')
                     gps_msg = TargetGPS()
                     gps_msg.target_longitude = deduced_long
                     gps_msg.target_latitude = deduced_lat
@@ -277,7 +277,7 @@ class TrackingNode(Node):
 
         end =time.time()
         #print("detection all  time:", end - start)
-        # self.get_logger().info(f"all time : { end - start} ")
+        self.get_logger().info(f"all time : { end - start} ")
         #record the time
         # finish_time=time.time()
         # spend_time = finish_time - track_time
@@ -397,12 +397,12 @@ class TrackingNode(Node):
             # Step 1: Calculate absolute gimbal orientation
             abs_gimbal_pitch = self.gimbal_pitch
             abs_gimbal_yaw = self.heading + self.gimbal_yaw
-            self.ranging_flag=False
+            self.ranging_flag=True
             # With ranging module
             if(self.ranging_flag):
                 # Step 2: Calculate the distance to the object
                 pitch_radians = math.radians(-abs_gimbal_pitch)
-                distance_to_object =  self.target_distance 
+                distance_to_object =  self.target_distance * math.cos(pitch_radians)
 
                 self.get_logger().info(f'distance:  {distance_to_object} ')
 
@@ -418,23 +418,26 @@ class TrackingNode(Node):
                 object_longitude = self.longitude + delta_longitude
                 
                 # Calculate the object's altitude
-                object_altitude = self.altitude - (distance_to_object * math.sin(pitch_radians))
+                object_altitude = self.altitude - (self.target_distance * math.sin(pitch_radians))
 
             # Without ranging module
             else:
-                if(self.fc_type == 0):
-                    rel_alt = self.altitude
-                elif(self.fc_type == 1):
+                if(self.fc_type == 0): # mq3
                     rel_alt = self.rel_alt
+                elif(self.fc_type == 1): #inf
+                    rel_alt = self.altitude 
                 
                 # Assuming object is at ground level
                 object_altitude = 0  # Object is at ground level
-                rel_alt = 1
+                #rel_alt = 1
                 # We still need to calculate the object's GPS location as before
                 # Since the object is assumed at ground level, we use rel_alt for calculations
                 # Calculate distance to object assuming the pitch angle points to the horizon
-                
-                distance_to_object = rel_alt / math.tan(math.radians(-abs_gimbal_pitch))
+                tan_ratio = math.tan(math.radians(-abs_gimbal_pitch))
+                if tan_ratio == 0:
+                    self.get_logger().warn(f'cannot deduce object horizontally')
+                    return 0.0,0.0,0.0
+                distance_to_object = rel_alt /tan_ratio
                 self.get_logger().info(f'distance : {distance_to_object}')
                 yaw_radians = math.radians(abs_gimbal_yaw)
                 delta_north = distance_to_object * math.cos(yaw_radians)
