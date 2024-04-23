@@ -446,8 +446,9 @@ class TrackingNode(Node):
                 if tan_ratio == 0:
                     self.get_logger().warn(f'cannot deduce object horizontally')
                     return 0.0,0.0,0.0
+
                 distance_to_object = rel_alt /tan_ratio
-                self.get_logger().info(f'distance : {distance_to_object}')
+                self.get_logger().info(f'rel+alt : {rel_alt} distance : {distance_to_object}')
                 yaw_radians = math.radians(abs_gimbal_yaw)
                 delta_north = distance_to_object * math.cos(yaw_radians)
                 delta_east = distance_to_object * math.sin(yaw_radians)
