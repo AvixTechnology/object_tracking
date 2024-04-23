@@ -370,11 +370,11 @@ class TrackingNode(Node):
         self.gps_mavlink_info = msg
 
         # update the require information
-        self.longitude = msg.longitude
-        self.latitude = msg.latitude
+        self.longitude = msg.longitude/1e7
+        self.latitude = msg.latitude/1e7
         self.altitude = msg.altitude
         self.rel_alt = msg.relative_altitude
-        self.heading = msg.heading
+        self.heading = msg.heading/100
         self.uav_pitch = msg.pitch
         self.uav_roll = msg.roll
 
@@ -397,28 +397,37 @@ class TrackingNode(Node):
             # Step 1: Calculate absolute gimbal orientation
             abs_gimbal_pitch = self.gimbal_pitch
             abs_gimbal_yaw = self.heading + self.gimbal_yaw
-            self.ranging_flag=True
+            self.ranging_flag=False
             # With ranging module
             if(self.ranging_flag):
                 # Step 2: Calculate the distance to the object
                 pitch_radians = math.radians(-abs_gimbal_pitch)
+                self.get_logger().info(f'pitch_radians:  {pitch_radians} ')
                 distance_to_object =  self.target_distance * math.cos(pitch_radians)
-
+            
                 self.get_logger().info(f'distance:  {distance_to_object} ')
 
                 # Step 3: Calculate the GPS location of the object
                 yaw_radians = math.radians(abs_gimbal_yaw)
+                self.get_logger().info(f'yaw_radians:  {yaw_radians} ')
                 delta_north = distance_to_object * math.cos(yaw_radians)
                 delta_east = distance_to_object * math.sin(yaw_radians)
+                self.get_logger().info(f'delta_east:  {delta_east} , delta_north: {delta_north}')
+                
 
                 delta_latitude = (delta_north / EARTH_RADIUS) * (180 / math.pi)
                 delta_longitude = (delta_east / EARTH_RADIUS) * (180 / math.pi) / math.cos(math.radians(self.latitude))
+                self.get_logger().info(f'delta_longitude:  {delta_longitude} , delta_latitude: {delta_latitude}')
 
                 object_latitude = self.latitude + delta_latitude
                 object_longitude = self.longitude + delta_longitude
+                self.get_logger().info(f'object_latitude:  {object_latitude} , object_longitude: {object_longitude}')
+
                 
                 # Calculate the object's altitude
                 object_altitude = self.altitude - (self.target_distance * math.sin(pitch_radians))
+                self.get_logger().info(f'object_altitude:  {object_altitude}')
+
 
             # Without ranging module
             else:
