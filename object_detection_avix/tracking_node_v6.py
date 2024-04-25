@@ -154,7 +154,7 @@ class TrackingNode(Node):
         self.get_logger().info(f'Model Initialized...')
 
         # flag for mq3 (0) or inf(1)
-        self.fc_type = 0
+        self.fc_type = 1
 
         # node created
         self.detection = ObjectDetection()
@@ -388,6 +388,7 @@ class TrackingNode(Node):
         self.longitude = msg.longitude
         self.latitude = msg.latitude
         self.altitude = msg.altitude
+        self.rel_alt = msg.relative_altitude
 
         self.uav_roll = msg.roll
         self.uav_pitch = msg.pitch
@@ -436,11 +437,13 @@ class TrackingNode(Node):
             else:
                 if(self.fc_type == 0): # mq3
                     rel_alt = self.rel_alt
+                    object_altitude = self.altitude
                 elif(self.fc_type == 1): #inf
                     rel_alt = self.altitude 
+                    object_altitude = self.altitude - self.rel_alt
                 
                 # Assuming object is at ground level
-                object_altitude = 0  # Object is at ground level
+                # object_altitude = 0  # Object is at ground level
                 #rel_alt = 1
                 # We still need to calculate the object's GPS location as before
                 # Since the object is assumed at ground level, we use rel_alt for calculations
