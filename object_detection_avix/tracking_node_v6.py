@@ -272,6 +272,7 @@ class TrackingNode(Node):
 
         #self.get_logger().info(f'object data: {objects_data}')
         if(num_detections>0): 
+            self.objects_data.num_detections = num_detections
             self.box_publisher.publish(self.objects_data)
 
 
@@ -347,6 +348,8 @@ class TrackingNode(Node):
             else:
                 self.state_following = False
                 self.target_id = -1
+        else:
+            self.state_tracking=False
         self.get_logger().info('Success!!!!...')
         goal_handle.succeed()
 
