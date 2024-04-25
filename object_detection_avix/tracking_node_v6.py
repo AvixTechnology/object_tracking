@@ -350,6 +350,7 @@ class TrackingNode(Node):
                 self.target_id = -1
         else:
             self.state_tracking=False
+            
         self.get_logger().info('Success!!!!...')
         goal_handle.succeed()
 
