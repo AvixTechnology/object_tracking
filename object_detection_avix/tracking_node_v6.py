@@ -84,7 +84,7 @@ class TrackingNode(Node):
             self.command_callback)
         
         # inf interface
-        # self.inf_subscriber = self.create_subscription(Inf_info, '/inf_interface/gps_info', self.gps_inf_callback, 10)
+        self.inf_subscriber = self.create_subscription(InfInfo, '/inf_interface/info', self.gps_inf_callback, 10)
             
         # ktg interface
         self.gimbal_subscriber = self.create_subscription(GimbalInfo, '/gimbal/info', self.gimbal_callback, 10)
@@ -149,7 +149,7 @@ class TrackingNode(Node):
 
         # state of this system
         self.state_tracking = False
-        self.state_following = False
+        self.state_following = True
         # Initialize your YOLO model
         self.get_logger().info(f'Model Initialized...')
 
@@ -213,7 +213,7 @@ class TrackingNode(Node):
             tlbr = t.tlbr
             tid = t.track_id
             tcls = t.cls
-            c,  id = int(tcls), int(tid)
+            c,  id = int(tcls), int(tid) %255
             x1,y1,x2,y2=tlbr[0],tlbr[1],tlbr[2],tlbr[3]
             if(id  == self.target_id and self.state_following):
                 # check if it is inside the center of the image
@@ -350,6 +350,9 @@ class TrackingNode(Node):
                 self.target_id = -1
         else:
             self.state_tracking=False
+            self.get_logger().info(f'disable tracking for False')
+            #pass
+            
             
         self.get_logger().info('Success!!!!...')
         goal_handle.succeed()
@@ -374,11 +377,11 @@ class TrackingNode(Node):
         self.gps_mavlink_info = msg
 
         # update the require information
-        self.longitude = msg.longitude/1e7
-        self.latitude = msg.latitude/1e7
+        self.longitude = msg.longitude
+        self.latitude = msg.latitude
         self.altitude = msg.altitude
         self.rel_alt = msg.relative_altitude
-        self.heading = msg.heading/100
+        self.heading = msg.heading
         self.uav_pitch = msg.pitch
         self.uav_roll = msg.roll
 
@@ -391,9 +394,10 @@ class TrackingNode(Node):
         self.altitude = msg.altitude
         self.rel_alt = msg.relative_altitude
 
-        self.uav_roll = msg.roll
-        self.uav_pitch = msg.pitch
-        self.headng = msg.yaw
+        #self.uav_roll = msg.roll
+        #self.uav_pitch = msg.pitch
+        self.heading = msg.heading
+        #self.get_logger().info(f'we have inf info')
 
     def find_location(self):
         # Constants
@@ -440,7 +444,7 @@ class TrackingNode(Node):
                     rel_alt = self.rel_alt
                     object_altitude = self.altitude
                 elif(self.fc_type == 1): #inf
-                    rel_alt = self.altitude 
+                    rel_alt = self.rel_alt 
                     object_altitude = self.altitude - self.rel_alt
                 
                 # Assuming object is at ground level
