@@ -163,13 +163,16 @@ class TrackingNode(Node):
         # for recording
         # self.track_file = open('track_results.txt', 'w')
         self.frame_count = 0
-
+        self.lasttime = 0 #for testing purpose
         
         self.get_logger().info(f'Object Detection Node created')
 
 
     def image_callback(self, msg):
         start =time.time()
+        #elapsed_time = start - self.lasttime
+        #self.get_logger().info(f'elapsed time: {elapsed_time}, fps: {format(1/elapsed_time,".2f")}')
+        #self.lasttime = start
         # not run the model if not initialized
         if self.initializing:
             return
@@ -223,7 +226,7 @@ class TrackingNode(Node):
                  # check if it is within 30% around center
                 if(x_center<self.input_width/2*1.3 and x_center>self.input_width/2*0.7 and y_center<self.input_height/2*1.3 and y_center>self.input_height/2*0.7):
                     #send the gps data
-                    deduced_lat, deduced_long, deduced_alt = self.find_location() # next we need to use the angle to deduce the right one
+                    deduced_lat, deduced_long, deduced_alt = self.find_location(x_center,y_center,self.input_width,self.input_height) # next we need to use the angle to deduce the right one
                     #print it out
                     self.get_logger().info(f'deduced GPS: {deduced_long},{deduced_lat},{deduced_alt}')
                     gps_msg = TargetGPS()
@@ -399,14 +402,17 @@ class TrackingNode(Node):
         self.heading = msg.heading
         #self.get_logger().info(f'we have inf info')
 
-    def find_location(self):
+    def find_location(self,x_center,y_center,input_width,input_height):
         # Constants
         EARTH_RADIUS = 6371000  # in meters
         try:
             # Step 1: Calculate absolute gimbal orientation
-            abs_gimbal_pitch = self.gimbal_pitch
+            offset = (((y_center-input_height/2)/input_height)*34.04)
+            abs_gimbal_pitch = self.gimbal_pitch - offset
+            
+            self.get_logger().info(f'222offset:  {offset}, real pitch {self.gimbal_pitch}, y center {y_center}')
             abs_gimbal_yaw = self.heading + self.gimbal_yaw
-            self.ranging_flag=False
+            #self.ranging_flag=True
             # With ranging module
             if(self.ranging_flag):
                 # Step 2: Calculate the distance to the object
