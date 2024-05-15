@@ -164,8 +164,9 @@ class TrackingNode(Node):
         # self.track_file = open('track_results.txt', 'w')
         self.frame_count = 0
         self.lasttime = 0 #for testing purpose
+        self.gimabl_inf_initialized=False
         
-        self.get_logger().info(f'Object Detection Node created')
+        self.get_logger().info(f'Object Detection Node createdv2')
 
 
     def image_callback(self, msg):
@@ -219,13 +220,20 @@ class TrackingNode(Node):
             c,  id = int(tcls), int(tid) %255
             x1,y1,x2,y2=tlbr[0],tlbr[1],tlbr[2],tlbr[3]
             if(id  == self.target_id and self.state_following):
+                if not self.gimabl_inf_initialized:
+                    self.get_logger().info("KTG not ready")
+                    continue
                 # check if it is inside the center of the image
                 x_center = (x1+x2)/2
                 y_center = (y1+y2)/2
+                self.get_logger().info(f'x_center: {x_center},y_center:{y_center}')
+
                 self.follow(x_center,y_center,x2-x1,y2-y1)
                  # check if it is within 30% around center
                 if(x_center<self.input_width/2*1.3 and x_center>self.input_width/2*0.7 and y_center<self.input_height/2*1.3 and y_center>self.input_height/2*0.7):
                     #send the gps data
+                    if not self.ranging_flag:
+                        continue
                     deduced_lat, deduced_long, deduced_alt = self.find_location(x_center,y_center,self.input_width,self.input_height) # next we need to use the angle to deduce the right one
                     #print it out
                     self.get_logger().info(f'deduced GPS: {deduced_long},{deduced_lat},{deduced_alt}')
@@ -376,6 +384,8 @@ class TrackingNode(Node):
         self.ranging_flag = msg.ranging_flag
         self.target_distance =msg.target_distance
 
+        self.gimabl_inf_initialized = True                                                                                                                                                                                                                      
+
     def gps_mavlink_callback(self, msg):
         self.gps_mavlink_info = msg
 
@@ -446,6 +456,7 @@ class TrackingNode(Node):
 
             # Without ranging module
             else:
+            
                 if(self.fc_type == 0): # mq3
                     rel_alt = self.rel_alt
                     object_altitude = self.altitude
