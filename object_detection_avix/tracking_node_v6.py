@@ -55,6 +55,7 @@ import numpy as np
 from rclpy.action import ActionServer
 import math
 import time 
+from collections import deque
 
 
 
@@ -91,7 +92,10 @@ class TrackingNode(Node):
 
         # avix_mavros interface
         self.mav_subscriber = self.create_subscription(MavlinkState, 'avix_mavros/state', self.gps_mavlink_callback, 10)
-
+    
+        # subcriber
+        self.mav_subscriber = self.create_subscription(Bool, '/icp_interface/ktg_auth', self.ktg_auth_callback, 10)    
+    
         # Publisher for the deviation 
         self.deviation_publisher = self.create_publisher(TrackingUpdate, '/object_detection/target_deviation', 1)
         self.box_publisher = self.create_publisher(ObjectDetections, '/object_detection/detections', 10) # bytes array is not working yet
@@ -124,7 +128,7 @@ class TrackingNode(Node):
         # Construct the full path to the .engine file
         #engine_path = os.path.join(package_dir, 'yolov8n.engine')
 
-        self.get_logger().info(f'Initializing Model...')
+        self.get_logger().info(f'Initializing Model...2')
 
         #start up the tensorrt 
 
@@ -156,6 +160,11 @@ class TrackingNode(Node):
         # flag for mq3 (0) or inf(1)
         self.fc_type = 1
 
+        # temporary stuff for chiayi
+        self.record_alt = False
+        self.track_alt = 0
+        self.sliding_window_alt = deque(maxlen=50)
+
         # node created
         self.detection = ObjectDetection()
         self.objects_data = ObjectDetections()
@@ -166,7 +175,11 @@ class TrackingNode(Node):
         self.lasttime = 0 #for testing purpose
         self.gimabl_inf_initialized=False
         
-        self.get_logger().info(f'Object Detection Node createdv2')
+        self.get_logger().info(f'Object Detection Node createdv1.0.0')
+    
+    def ktg_auth_callback(self, msg):
+        if not msg.data:
+            self.gimabl_inf_initialized = False
 
 
     def image_callback(self, msg):
@@ -217,34 +230,41 @@ class TrackingNode(Node):
             tlbr = t.tlbr
             tid = t.track_id
             tcls = t.cls
-            c,  id = int(tcls), int(tid) %255
+            c,  id = int(tcls), int(tid) %128
             x1,y1,x2,y2=tlbr[0],tlbr[1],tlbr[2],tlbr[3]
             if(id  == self.target_id and self.state_following):
+
                 if not self.gimabl_inf_initialized:
                     self.get_logger().info("KTG not ready")
-                    continue
-                # check if it is inside the center of the image
-                x_center = (x1+x2)/2
-                y_center = (y1+y2)/2
-                self.get_logger().info(f'x_center: {x_center},y_center:{y_center}')
+                else:
+                    # check if it is inside the center of the image
+                    x_center = (x1+x2)/2
+                    y_center = (y1+y2)/2
+                    self.get_logger().info(f'x_center: {x_center},y_center:{y_center}')
 
-                self.follow(x_center,y_center,x2-x1,y2-y1)
-                 # check if it is within 30% around center
-                if(x_center<self.input_width/2*1.3 and x_center>self.input_width/2*0.7 and y_center<self.input_height/2*1.3 and y_center>self.input_height/2*0.7):
-                    #send the gps data
-                    if not self.ranging_flag:
-                        continue
-                    deduced_lat, deduced_long, deduced_alt = self.find_location(x_center,y_center,self.input_width,self.input_height) # next we need to use the angle to deduce the right one
-                    #print it out
-                    self.get_logger().info(f'deduced GPS: {deduced_long},{deduced_lat},{deduced_alt}')
-                    gps_msg = TargetGPS()
-                    gps_msg.target_longitude = deduced_long
-                    gps_msg.target_latitude = deduced_lat
-                    gps_msg.target_altitude = deduced_alt
-                    gps_msg.estimate_source = self.ranging_flag
+                    self.follow(x_center,y_center,x2-x1,y2-y1)
+                    # check if it is within 30% around center
+                    if(x_center<self.input_width/2*1.5 and x_center>self.input_width/2*0.5 and y_center<self.input_height/2*1.5 and y_center>self.input_height/2*0.5):
+                        #send the gps data
+                        if not self.ranging_flag:
+                            self.get_logger().info("ranging not ready")
+                        else:
+                            deduced_lat, deduced_long, deduced_alt = self.find_location(x_center,y_center,self.input_width,self.input_height) # next we need to use the angle to deduce the right one
+                            #print it out
+                            self.get_logger().info(f'deduced GPS: {deduced_long},{deduced_lat},{deduced_alt}')
+                            if self.record_alt:
+                                self.track_alt = deduced_alt
+                                self.record_alt = False
 
-                    #TODO a kalman filter here could suit the requirement, but first need to study the fluctuation
-                    self.targetGPS_publisher.publish(gps_msg)
+                            gps_msg = TargetGPS()
+                            gps_msg.target_longitude = deduced_long
+                            gps_msg.target_latitude = deduced_lat
+                            gps_msg.target_altitude = self.track_alt
+                            gps_msg.estimate_source = self.ranging_flag
+
+                           
+                            #TODO a kalman filter here could suit the requirement, but first need to study the fluctuation
+                            self.targetGPS_publisher.publish(gps_msg)
 
             self.detection.id = id  # Assign the detection ID
             self.detection.bbox = tlbr  # Replace with actual bbox coordinates
@@ -351,6 +371,7 @@ class TrackingNode(Node):
         
         if tracking_enabled:
             self.state_tracking = True
+            self.record_alt = True
 
             if(following_enabled):
                 self.state_following = True
@@ -383,6 +404,7 @@ class TrackingNode(Node):
         self.gimbal_yaw = msg.yaw_angle
         self.ranging_flag = msg.ranging_flag
         self.target_distance =msg.target_distance
+        self.zoom_level = msg.eo_zoom
 
         self.gimabl_inf_initialized = True                                                                                                                                                                                                                      
 
@@ -417,11 +439,12 @@ class TrackingNode(Node):
         EARTH_RADIUS = 6371000  # in meters
         try:
             # Step 1: Calculate absolute gimbal orientation
-            offset = (((y_center-input_height/2)/input_height)*34.04)
+            #offset = (((y_center-input_height/2)/input_height)*34.04)
+            offset = (((y_center-input_height/2)/input_height)*68.08/self.zoom_level)
             abs_gimbal_pitch = self.gimbal_pitch - offset
             
             self.get_logger().info(f'222offset:  {offset}, real pitch {self.gimbal_pitch}, y center {y_center}')
-            abs_gimbal_yaw = self.heading + self.gimbal_yaw
+            abs_gimbal_yaw = self.gimbal_yaw
             #self.ranging_flag=True
             # With ranging module
             if(self.ranging_flag):
@@ -450,7 +473,17 @@ class TrackingNode(Node):
 
                 
                 # Calculate the object's altitude
-                object_altitude = self.altitude - (self.target_distance * math.sin(pitch_radians))
+                #object_altitude = self.altitude - (self.target_distance * math.sin(pitch_radians))
+                #method 1 using inf info entirely
+                object_altitude = self.altitude - self.rel_alt
+
+                # method 2 using the sliding window
+                # cal_altitude = self.altitude - (self.target_distance * math.sin(pitch_radians))
+                # self.sliding_window_alt.append(cal_altitude)
+                # object_altitude = sum(self.sliding_window_alt) / len(self.sliding_window_alt)
+
+                # method 3 using a simple kalman filter
+
                 self.get_logger().info(f'object_altitude:  {object_altitude}')
 
 
