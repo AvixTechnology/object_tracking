@@ -26,7 +26,8 @@ setup(
     entry_points={
         'console_scripts': [
             'tracking_node = object_detection_avix.tracking_node_v6:main',
-            'test_time=object_detection_avix.test_time:main'
+            'test_time=object_detection_avix.test_time:main' ,
+            'test_qt5=object_detection_avix.tracking_node_image:main'
         ],
     },
 )

@@ -56,7 +56,7 @@ class botsortConfig():
         self.mot20 = False
         self.cmc_method = 'sparseOptFlow'
         self.ablation = False
-        self.with_reid = True
+        self.with_reid = False
         self.fast_reid_config = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/fast_reid/configs/MSMT17/sbs_S50.yml"
         self.fast_reid_weights = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/pretrained/msmt_sbs_S50.pth"
         self.proximity_thresh = 0.05
@@ -126,7 +126,7 @@ class ReIDTrack():
         
         for t in online_targets:
             tlbr = t.tlbr
-            tid = t.track_id
+            tid = t.track_id %128
             tcls = t.cls
             c,  id = int(tcls), int(tid)
             label =  ('' if id is None else f'id:{id} ') + results[0].names[c]
@@ -155,7 +155,7 @@ class ReIDTrack():
         # print("all time :", toc3 - tic )
         
         
-        return online_targets ,self.yolo_data ,self.BotSort_data 
+        return online_targets ,self.yolo_data ,self.BotSort_data , annotated_frame
 
 
 class KalmanFilter(object):
