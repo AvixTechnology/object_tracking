@@ -32,7 +32,7 @@ class botsortConfig():
         self.split_to_eval = 'test'
         self.img_size = 1280
         self.conf_thres = 0.2
-        self.iou_thres = 0.7
+        self.iou_thres = 0.2
         self.device = 0
         self.view_img = False
         self.classes = [0]
@@ -59,7 +59,7 @@ class botsortConfig():
         self.with_reid = False
         self.fast_reid_config = r"/home/nvidia/tracking_modules/BoT-SORT/fast_reid/configs/MOT17/sbs_S50.yml"
         self.fast_reid_weights = r"/home/nvidia/tracking_modules/BoT-SORT/pretrained/mot17_sbs_S50.pth"
-        self.proximity_thresh = 0.4
+        self.proximity_thresh = 0.05
         self.appearance_thresh = 0.15
 
 class ReIDTrack():
