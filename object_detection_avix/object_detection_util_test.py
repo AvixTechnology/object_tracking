@@ -134,7 +134,7 @@ class ReIDTrack():
             self.BotSort_data.append([update_time, results[0].names[c], id,  tlbr])
 
         annotated_frame = annotator.result()
-        annotated_frame = cv2.resize(annotated_frame,(640,384))
+        annotated_frame = cv2.resize(annotated_frame,(640,480))
         
         #cv2.imshow("test1",annotated_frame)
         # toc3=time.time()

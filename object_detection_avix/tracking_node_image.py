@@ -515,7 +515,7 @@ class TrackingNode(Node):
                 tan_ratio = math.tan(math.radians(-abs_gimbal_pitch))
                 if tan_ratio == 0:
                     self.get_logger().warn(f'cannot deduce object horizontally')
-                    return 0.0,0.0,0.0
+                    return 0.0,0.0,0.0,0.0,0.0
 
                 distance_to_object = rel_alt /tan_ratio
                 self.get_logger().info(f'rel+alt : {rel_alt} distance : {distance_to_object}')
@@ -531,7 +531,7 @@ class TrackingNode(Node):
 
         except AttributeError as e:
             self.get_logger().warn(f'some property has not been intialized: {e}')
-            return 0.0,0.0,0.0
+            return 0.0,0.0,0.0,0.0,0.0
 
         return object_latitude, object_longitude, object_altitude/1.0 ,delta_north, delta_east
 
