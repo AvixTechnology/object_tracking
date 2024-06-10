@@ -30,6 +30,11 @@ Dependencies:
 - NumPy for numerical computations
 - Avix related package: avix_msg, avix_action
 
+Services and Topics:
+- /object_detection_cmd: Action server for receiving object detection and following commands.
+- /tracking_update: Published tracking updates, including target deviation and detected objects' information, for further processing or control actions.
+
+
 Current Updates:
 - 1.0.1: Update Kalman Filter for better tracking stability (Target GPS position and altitude)
 
@@ -41,137 +46,189 @@ Version: 0.6.1
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from avix_action.action import ObjectDetectionCMD
-from std_msgs.msg import Bool, Int32MultiArray, Float32MultiArray, Int32, ByteMultiArray, Header
-from ultralytics import YOLO
-from avix_msg.msg import TrackingUpdate, MavlinkState, ObjectDetection, ObjectDetections, TargetGPS, TrackingCommand, InfInfo, GimbalInfo
+from avix_msg.msg import  ObjectDetection, ObjectDetections, MQ3State
 import torch
 import cv2
-import struct
 #from object_detection_util import KalmanFilter ,ReIDTrack
-from object_detection_avix.object_detection_util import KalmanFilter ,ReIDTrack
+from object_detection_avix.object_detection_util import ReIDTrack
 from cv_bridge import CvBridge, CvBridgeError
 import numpy as np  
-from rclpy.action import ActionServer
-import math
 import time 
-from collections import deque
 
 
 
-# for reading engin
-import os
-from ament_index_python.packages import get_package_share_directory
+
+# for reading engine
+from avix_utils.avix_utils.avix_enums import ObjectDetectionMode
+from avix_utils.avix_utils import avix_common
+from avix_utils.srv import ObjectDetectionStatus, EnableFunction, GetGimbalInfo
 
 torch.cuda.device(0)
 torch.manual_seed(23) #for cuda initialization bugs
 torch.device('cuda' if torch.cuda.is_available() else 'cpu' )
-# Prepare the packet header
-packet_header = bytes([0x41, 0x76, 0x69, 0x78])
-# Sender ID: 0x04 (AI)
-sender_id = bytes([0x04])
 
+# status system 
+from dataclasses import dataclass
+@dataclass
+class NodeState:
+    enabled: bool = True
+    is_intializing: bool = True
+    is_detecting: bool = False
+    detection_mode: ObjectDetectionMode = ObjectDetectionMode.Yolov8_BotSort
+    
 class TrackingNode(Node):
     def __init__(self):
         super().__init__('object_tracking_node')
-        # Subscribe to necessary topics
-        self.target_subscriber = self.create_subscription(Int32, '/object_detection/tracking_target_id', self.target_id_callback, 10)
-        self.image_subscriber = self.create_subscription(Image, '/ktg_gimbal/image_raw', self.image_callback, 10)
-        #self.enable_subscriber = self.create_subscription(TrackingCommand, '/icp_interface/tracking_cmd', self.status_callback, 10)
-        self.cmd_action_server =  ActionServer(
-            self,
-            ObjectDetectionCMD,
-            'object_detection/cmd',
-            self.command_callback)
-        
-        # inf interface
-        self.inf_subscriber = self.create_subscription(InfInfo, '/inf_interface/info', self.gps_inf_callback, 10)
-            
-        # ktg interface
-        self.gimbal_subscriber = self.create_subscription(GimbalInfo, '/gimbal/info', self.gimbal_callback, 10)
+        # Subscribe to image coming
+        self.image_subscriber = self.create_subscription(
+            Image, 
+            avix_common.KTG_EO_IMG, 
+            self.image_callback, 
+            10
+        )
 
-        # avix_mavros interface
-        self.mav_subscriber = self.create_subscription(MavlinkState, 'avix_mavros/state', self.gps_mavlink_callback, 10)
+        self.master_subscriber = self.create_subscription(
+            MQ3State, 
+            avix_common.MQ3_STATUS, 
+            self.master_status_callback, 
+            10
+        )
     
-        # subcriber
-        self.mav_subscriber = self.create_subscription(Bool, '/icp_interface/ktg_auth', self.ktg_auth_callback, 10)    
-    
-        # Publisher for the deviation 
-        self.deviation_publisher = self.create_publisher(TrackingUpdate, '/object_detection/target_deviation', 1)
-        self.box_publisher = self.create_publisher(ObjectDetections, '/object_detection/detections', 10) # bytes array is not working yet
-        self.targetGPS_publisher = self.create_publisher(TargetGPS, '/object_detection/target_gps', 10)
-        self.initializing = True
+        # Publisher for the Detections
+        self.box_publisher = self.create_publisher(
+            ObjectDetections, 
+            avix_common.OBJECT_DETECTIONS, 
+            10
+        ) 
 
-        # initialize the parameter
-        # self.declare_parameter('tracking_enabled', False)
-        #self.tracking_enabled = self.get_parameter('tracking_enabled').value
+        # state control
+        self.state = NodeState()
 
-        self.declare_parameter('confidence', 0.3)
-        self.confidence = self.get_parameter('confidence').value
+        # Timer to reset tracking status
+        self.tracking_timer = self.create_timer(3.0, self.reset_tracking_status)
+        self.last_tracking_time = self.get_clock().now()
 
-        self.declare_parameter('input_width', 1280)
-        self.input_width = self.get_parameter('input_width').value
+        #status service
+        # Service for status checking
+        self.status_service = self.create_service(
+            ObjectDetectionStatus,
+            avix_common.GIMBAL_TRACKING_STATUS,
+            self.handle_get_status
+        )
 
-        self.declare_parameter('input_height', 720)
-        self.input_height = self.get_parameter('input_height').value
+        # service to enable object detection
+        self.enbale_service = self.create_service(
+            EnableFunction,
+            avix_common.ENABLE_OBJECT_DETECTION,
+            self.handle_enable_object_detection
+        )
 
-        self.declare_parameter('target_object', [0])
-        self.target_objects = self.get_parameter('target_object').value
-        
         #check if enviornment is ok
         if(not torch.cuda.is_available()):
-            self.get_logger().warn(f'Pytorch has no cuda support, please reinstall')
+            self.get_logger().error(f'Pytorch has no cuda support, please reinstall')
 
         self.get_logger().info(f'Initializing Model...')
 
         # Initialize CV bridge
         self.bridge = CvBridge()
 
-        self.result=ReIDTrack()
+        self.model=ReIDTrack()
         # Generate a random image
         random_image = np.random.randint(0, 256, (720, 1280, 3), dtype=np.uint8)
 
         # Convert the image to bgr8 format
         random_image_bgr8 = cv2.cvtColor(random_image, cv2.COLOR_RGB2BGR)
 
-        self.result.track(random_image_bgr8)
+        self.model.track(random_image_bgr8)
 
-        # initialize the tracking variable
-        self.target_id = -1 # for following
-        self.KF_initailized = False
+        # initialization done
+        self.state.is_intializing = False
+         # Timer to reset following status
+        self.detection_timer = self.create_timer(3.0, self.reset_following_status)
+        self.last_tracking_time = self.get_clock().now()
 
-        self.initializing = False
-
-        # state of this system
-        self.state_tracking = False
-        self.state_following = False
-        # Initialize your YOLO model
-        self.get_logger().info(f'Model Initialized...')
-
-        # flag for mq3 (0) or inf(1)
-        self.fc_type = 1
-
-        # node created
         self.detection = ObjectDetection()
         self.objects_data = ObjectDetections()
 
-        # for recording
-        # self.track_file = open('track_results.txt', 'w')
-        self.frame_count = 0
-        self.lasttime = 0 #for testing purpose
-
-        self.gimabl_inf_initialized=False # TODO remove this feature of authing
+        # intialize the client
+        self.cli_gimbal_info = self.create_client(GetGimbalInfo, avix_common.KTG_CAMERA_INFO)
         
-        self.get_logger().info(f'Object Detection Node created_v1.0.1')
-    
-    def ktg_auth_callback(self, msg):
-        if not msg.data:
-            self.gimabl_inf_initialized = False
+        # Wait for services to start
+        self.wait_for_services()
 
+        # request the camera info
+        self.get_camera_info()
+
+        self.get_logger().info(f'*******Object Dtection Node started (V1.0.1)**********')
+    
+    # ============service related============
+    # region Service Related
+    def wait_for_services(self):
+        while not self.cli_gimbal_info.wait_for_service(timeout_sec=3.0):
+            self.get_logger().info('[Gimbal info] Service not available, waiting again... Please boot it up if have not!')
+
+    def get_camera_info(self):
+        request = GetGimbalInfo.Request()  
+        future = self.cli_gimbal_info.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+        response = future.result()
+        self.input_width = response.resolution_x
+        self.input_height = response.resolution_y
+        
+
+    def reset_following_status(self):
+        if not self.state.is_detecting:
+            return # no need to reset
+        current_time = self.get_clock().now()
+        if (current_time - self.last_tracking_time).nanoseconds > 3 * 1e9:
+            self.state.is_detecting = False
+
+    def handle_get_status(self, request, response):
+        response.enabled = self.state.enabled
+        response.is_detecting = self.state.is_detecting
+        response.detection_mode = self.state.detection_mode.value
+        response.is_intializing = self.state.is_intializing
+        return response
+    
+    def handle_enable_object_detection(self, request, response):
+        if self.state.enabled == request.enable:
+            if request.enabled:
+                response.error_code = 100
+            else:
+                response.error_code = 101
+            response.success = False
+            return response
+        
+        if request.enable:
+            if self.state.is_intializing:
+                response.success = False
+                response.error_code = 1
+                response.message = 'Tracking system is not initialized.'
+                self.get_logger().warn("Tracking system is not initialized. Skipping the enable service request.")
+                return response
+            
+            self.state.enabled = True
+        else:
+            self.state.enabled = False
+        
+        response.error_code = 0
+        response.success = True
+        return response
+    
+
+    def master_status_callback(self, msg):  
+        # check if the targetid is the same
+        if self.state.enabled != msg.detection_enabled:
+            self.get_logger().warn(f'[SEVERE] Following status does not match, current {self.state.following_enabled} vs master {msg.following_enabled}. Changing to it...')
+            self.state.following_enabled = msg.following_enabled
+    # endregion
+
+    # ============image related============
+    # region image related
     def image_callback(self, msg):
         start =time.time()
         # not run the model if not initialized
-        if self.initializing:
+        if self.state.is_initializing:
             return
 
         # not run the model if tracking is disabled
@@ -197,7 +254,7 @@ class TrackingNode(Node):
 
         # do the tracking
         
-        results , _ , _ = self.result.track(cv_image)
+        results , _ , _ = self.model.track(cv_image)
         # Prepare the objects' data
 
         num_detections = 0
@@ -215,36 +272,7 @@ class TrackingNode(Node):
             tcls = t.cls
             c,  id = int(tcls), int(tid) %128
             x1,y1,x2,y2=tlbr[0],tlbr[1],tlbr[2],tlbr[3]
-            if(id  == self.target_id and self.state_following):
 
-                if not self.gimabl_inf_initialized:
-                    self.get_logger().info("KTG not ready")
-                else:
-                    # check if it is inside the center of the image
-                    x_center = (x1+x2)/2
-                    y_center = (y1+y2)/2
-                    self.get_logger().info(f'x_center: {x_center},y_center:{y_center}')
-
-                    self.follow(x_center,y_center,x2-x1,y2-y1)
-                    # check if it is within 30% around center
-                    if(x_center<self.input_width/2*1.5 and x_center>self.input_width/2*0.5 and y_center<self.input_height/2*1.5 and y_center>self.input_height/2*0.5):
-                        #send the gps data
-                        if not self.ranging_flag:
-                            self.get_logger().info("ranging not ready")
-                        else:
-                            deduced_lat, deduced_long, deduced_alt = self.find_location(x_center,y_center,self.input_width,self.input_height) # next we need to use the angle to deduce the right one
-                            #print it out
-                            self.get_logger().info(f'deduced GPS: {deduced_long},{deduced_lat},{deduced_alt}')
-
-                            gps_msg = TargetGPS()
-                            gps_msg.target_longitude = deduced_long
-                            gps_msg.target_latitude = deduced_lat
-                            gps_msg.target_altitude = deduced_alt
-                            gps_msg.estimate_source = self.ranging_flag
-
-                           
-                            #TODO a kalman filter here could suit the requirement, but first need to study the fluctuation
-                            self.targetGPS_publisher.publish(gps_msg)
 
             self.detection.id = id  # Assign the detection ID
             self.detection.bbox = tlbr  # Replace with actual bbox coordinates
@@ -259,230 +287,15 @@ class TrackingNode(Node):
             self.objects_data.num_detections = num_detections
             self.box_publisher.publish(self.objects_data)
 
+        self.last_tracking_time = self.get_clock().now()
+        self.state.is_detecting = True
 
         end =time.time()
-        #print("detection all  time:", end - start)
         self.get_logger().info(f"all time : { end - start} ")
-        #record the time
-        # finish_time=time.time()
-        # spend_time = finish_time - track_time
-        # self.track_file.write(str(spend_time)+ ", ")
-            
-
-    def follow(self, cx, cy,size_x,size_y):
-        if(not self.KF_initailized):
-            self.initialize_KF(cx,cy)
-
-        filtered_x = np.dot(self.H,  self.KF_x.predict())[0]
-        filtered_y = np.dot(self.H,  self.KF_y.predict())[0]
-
-        # publish the deviation
-        deviation = TrackingUpdate()
-        deviation.deviation_x = filtered_x-self.input_width/2
-        deviation.deviation_y = filtered_y-self.input_height/2
-        deviation.resolution_x = float(self.input_width)
-        deviation.resolution_y = float(self.input_height)
-        deviation.size_x = float(size_x)
-        deviation.size_y = float(size_y)
-        deviation.header.stamp = self.get_clock().now().to_msg()
-        self.deviation_publisher.publish(deviation)
-
-        self.KF_x.update(cx)
-        self.KF_y.update(cy)
-
-    def initialize_KF(self,x,y):
-        dt = 1/15 # assume 15 fps
-        F = np.array([[1, dt, 0], [0, 1, dt], [0, 0, 1]])
-        self.H = np.array([1, 0, 0]).reshape(1, 3)
-        Q = np.array([[0.05, 0.05, 0.0], [0.05, 0.05, 0.0], [0.0, 0.0, 0.0]])
-        R = np.array([0.5]).reshape(1, 1)
-        x_0 = np.array([x,0,0])
-        y_0 = np.array([y,0,0])
-        #del self.KF_x
-        self.KF_x = KalmanFilter(F = F, H = self.H, Q = Q, R = R, x0=x_0)
-        self.KF_y = KalmanFilter(F = F, H = self.H, Q = Q, R = R, x0=y_0)
-        self.KF_initailized = True
-
-    def command_callback(self, goal_handle):
-        self.get_logger().info('Changing Status Based on command')
-        result = ObjectDetectionCMD.Result()
-        tracking_enabled = goal_handle.request.tracking_enabled
-        following_enabled = goal_handle.request.following_enabled
-        following_id = goal_handle.request.following_id
-        #self.get_logger().info(f'{self.initializing}')
-        self.get_logger().info(f'{tracking_enabled}')
-        
-        self.get_logger().info(f'follow enabled:{following_enabled}')
-        self.get_logger().info(f'follow id :{following_id}')
-        
-
-        if self.initializing:
-            self.get_logger().warn(f'Object Detection Model still initializing, please send command later')
-            goal_handle.abort()
-            result.error_code = 1
-            return result
-        
-        if tracking_enabled:
-            self.state_tracking = True
-
-            if(following_enabled):
-                self.state_following = True
-                self.target_id = following_id
-                self.get_logger().info(f'id change to {self.target_id} ')
-            else:
-                self.state_following = False
-                self.target_id = -1
-        else:
-            self.state_tracking=False
-            self.get_logger().info(f'disable tracking for False')
-            #pass
-            
-            
-        self.get_logger().info('Success!!!!...')
-        goal_handle.succeed()
-
-        result.tracking_enabled = tracking_enabled
-        result.following_enabled = following_enabled
-        result.following_id = following_id
-        result.error_code = 0
-
-        return result
-    
-    def gimbal_callback(self, msg):
-        self.gimbal_info = msg
-
-        # update the require information
-        self.gimbal_pitch = msg.pitch_angle
-        self.gimbal_yaw = msg.yaw_angle
-        self.ranging_flag = msg.ranging_flag
-        self.target_distance =msg.target_distance
-        self.zoom_level = msg.eo_zoom
-
-        self.gimabl_inf_initialized = True                                                                                                                                                                                                                      
-
-    def gps_mavlink_callback(self, msg):
-        self.gps_mavlink_info = msg
-
-        # update the require information
-        self.longitude = msg.longitude
-        self.latitude = msg.latitude
-        self.altitude = msg.altitude
-        self.rel_alt = msg.relative_altitude
-        self.heading = msg.heading
-        self.uav_pitch = msg.pitch
-        self.uav_roll = msg.roll
-
-    def gps_inf_callback(self,msg):
-        self.gps_inf_info = msg
-
-        # update the require information
-        self.longitude = msg.longitude
-        self.latitude = msg.latitude
-        self.altitude = msg.altitude
-        self.rel_alt = msg.relative_altitude
-
-        #self.uav_roll = msg.roll
-        #self.uav_pitch = msg.pitch
-        self.heading = msg.heading
-        #self.get_logger().info(f'we have inf info')
-
-    def find_location(self,x_center,y_center,input_width,input_height):
-        # Constants
-        EARTH_RADIUS = 6371000  # in meters
-        try:
-            # Step 1: Calculate absolute gimbal orientation with compensation
-            y_offset = (((y_center-input_height/2)/input_height)*68.08/self.zoom_level)
-            abs_gimbal_pitch = self.gimbal_pitch - y_offset
-
-            self.get_logger().info(f'y_offset:  {y_offset}, real pitch {self.gimbal_pitch}, y center {y_center}')
-
-            x_offset = (((x_center-input_width/2)/input_width)*68.08/self.zoom_level) #TODO change to the actual FOV value
-            abs_gimbal_yaw = self.gimbal_yaw + x_offset
-
-            self.get_logger().info(f'x_offset:  {x_offset}, real yaw {self.gimbal_yaw}, x center {x_center}')
-            #self.ranging_flag=True
-            # With ranging module
-            if(self.ranging_flag):
-                # Step 2: Calculate the distance to the object
-                pitch_radians = math.radians(-abs_gimbal_pitch)
-                self.get_logger().info(f'pitch_radians:  {pitch_radians} ')
-                distance_to_object =  self.target_distance * math.cos(pitch_radians)
-            
-                self.get_logger().info(f'distance:  {distance_to_object} ')
-
-                # Step 3: Calculate the GPS location of the object
-                yaw_radians = math.radians(abs_gimbal_yaw)
-                self.get_logger().info(f'yaw_radians:  {yaw_radians} ')
-                delta_north = distance_to_object * math.cos(yaw_radians)
-                delta_east = distance_to_object * math.sin(yaw_radians)
-                self.get_logger().info(f'delta_east:  {delta_east} , delta_north: {delta_north}')
-                
-
-                delta_latitude = (delta_north / EARTH_RADIUS) * (180 / math.pi)
-                delta_longitude = (delta_east / EARTH_RADIUS) * (180 / math.pi) / math.cos(math.radians(self.latitude))
-                self.get_logger().info(f'delta_longitude:  {delta_longitude} , delta_latitude: {delta_latitude}')
-
-                object_latitude = self.latitude + delta_latitude
-                object_longitude = self.longitude + delta_longitude
-                self.get_logger().info(f'object_latitude:  {object_latitude} , object_longitude: {object_longitude}')
-
-                
-                # Calculate the object's altitude using the relative altitude (given by inf)
-                #object_altitude = self.altitude - self.rel_alt
-
-                # use real altitude
-                object_altitude = self.altitude - (self.target_distance * math.sin(pitch_radians))
-
-                self.get_logger().info(f'object_altitude:  {object_altitude}')
-
-
-            # Without ranging module
-            else:
-                rel_alt = self.rel_alt 
-                object_altitude = self.altitude - self.rel_alt
-                
-                # Assuming object is at ground level
-                # object_altitude = 0  # Object is at ground level
-                #rel_alt = 1
-                # We still need to calculate the object's GPS location as before
-                # Since the object is assumed at ground level, we use rel_alt for calculations
-                # Calculate distance to object assuming the pitch angle points to the horizon
-                tan_ratio = math.tan(math.radians(-abs_gimbal_pitch))
-                if tan_ratio == 0:
-                    self.get_logger().warn(f'cannot deduce object horizontally')
-                    return 0.0,0.0,0.0
-
-                distance_to_object = rel_alt /tan_ratio
-                self.get_logger().info(f'rel+alt : {rel_alt} distance : {distance_to_object}')
-                yaw_radians = math.radians(abs_gimbal_yaw)
-                delta_north = distance_to_object * math.cos(yaw_radians)
-                delta_east = distance_to_object * math.sin(yaw_radians)
-
-                delta_latitude = (delta_north / EARTH_RADIUS) * (180 / math.pi)
-                delta_longitude = (delta_east / EARTH_RADIUS) * (180 / math.pi) / math.cos(math.radians(self.latitude))
-
-                object_latitude = self.latitude + delta_latitude
-                object_longitude = self.longitude + delta_longitude
+    # endregion
 
 
 
-        except AttributeError as e:
-            self.get_logger().warn(f'some property has not been intialized: {e}')
-            return 0.0,0.0,0.0
-
-        return object_latitude, object_longitude, object_altitude/1.0
-
-        
-
-    def target_id_callback(self, msg):
-        # Assuming msg.data contains the ID of the target to track
-        self.target_id = msg.data
-        self.get_logger().info(f'Received target ID: {self.target_id}')
-
-    def publish_deviation(self, deviation_x, deviation_y):
-        msg = Float32MultiArray()
-        msg.data = [deviation_x, deviation_y]
-        self.deviation_publisher.publish(msg)
 
 def main(args=None):
     rclpy.init(args=args)
