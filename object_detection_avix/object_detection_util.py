@@ -57,8 +57,8 @@ class botsortConfig():
         self.cmc_method = 'sparseOptFlow'
         self.ablation = False
         self.with_reid = False
-        self.fast_reid_config = r"/home/nvidia/tracking_modules/BoT-SORT/fast_reid/configs/MOT17/sbs_S50.yml"
-        self.fast_reid_weights = r"/home/nvidia/tracking_modules/BoT-SORT/pretrained/mot17_sbs_S50.pth"
+        self.fast_reid_config = r"/home/nvidia//Documents/avix/inference_dependency/BoT-SORT/fast_reid/configs/MOT17/sbs_S50.yml"
+        self.fast_reid_weights = r"/home/nvidia//Documents/avix/inference_dependency/BoT-SORT/pretrained/mot17_sbs_S50.pth"
         self.proximity_thresh = 0.05
         self.appearance_thresh = 0.15
 
