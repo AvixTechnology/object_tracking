@@ -46,7 +46,7 @@ Version: 0.6.1
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from avix_msg.msg import  ObjectDetection, ObjectDetections, MQ3State
+from avix_utils.msg import  ObjectDetection, ObjectDetections, MQ3State
 import torch
 import cv2
 #from object_detection_util import KalmanFilter ,ReIDTrack
@@ -59,8 +59,8 @@ import time
 
 
 # for reading engine
-from avix_utils.avix_utils.avix_enums import ObjectDetectionMode
-from avix_utils.avix_utils import avix_common
+from avix_utils.avix_enums import ObjectDetectionMode
+from avix_utils import avix_common
 from avix_utils.srv import ObjectDetectionStatus, EnableFunction, GetGimbalInfo
 
 torch.cuda.device(0)
@@ -105,14 +105,14 @@ class TrackingNode(Node):
         self.state = NodeState()
 
         # Timer to reset tracking status
-        self.tracking_timer = self.create_timer(3.0, self.reset_tracking_status)
+        self.tracking_timer = self.create_timer(3.0, self.reset_following_status)
         self.last_tracking_time = self.get_clock().now()
 
         #status service
         # Service for status checking
         self.status_service = self.create_service(
             ObjectDetectionStatus,
-            avix_common.GIMBAL_TRACKING_STATUS,
+            avix_common.OBJECT_DETECTION_STATUS,
             self.handle_get_status
         )
 
@@ -155,7 +155,7 @@ class TrackingNode(Node):
         
         # Wait for services to start
         self.wait_for_services()
-
+        self.init_gimbal_info =False
         # request the camera info
         self.get_camera_info()
 
@@ -174,6 +174,7 @@ class TrackingNode(Node):
         response = future.result()
         self.input_width = response.resolution_x
         self.input_height = response.resolution_y
+        self.init_gimbal_info= True
         
 
     def reset_following_status(self):
@@ -219,8 +220,8 @@ class TrackingNode(Node):
     def master_status_callback(self, msg):  
         # check if the targetid is the same
         if self.state.enabled != msg.detection_enabled:
-            self.get_logger().warn(f'[SEVERE] Following status does not match, current {self.state.following_enabled} vs master {msg.following_enabled}. Changing to it...')
-            self.state.following_enabled = msg.following_enabled
+            self.get_logger().warn(f'[SEVERE] Following status does not match, current {self.state.enabled} vs master {msg.detection_enabled}. Changing to it...')
+            self.state.enabled = msg.detection_enabled
     # endregion
 
     # ============image related============
@@ -228,11 +229,15 @@ class TrackingNode(Node):
     def image_callback(self, msg):
         start =time.time()
         # not run the model if not initialized
-        if self.state.is_initializing:
+        if self.state.is_intializing:
             return
 
         # not run the model if tracking is disabled
-        if not self.state_tracking:
+        if not self.state.enabled:
+            return
+        
+        # wait gettting the gimbal info 
+        if not self.init_gimbal_info:
             return
         
         # Convert ROS Image message to CV2 format and pass it to model
@@ -283,8 +288,10 @@ class TrackingNode(Node):
             self.objects_data.detections.append(self.detection)
 
         #self.get_logger().info(f'object data: {objects_data}')
+        print(num_detections)
         if(num_detections>0): 
             self.objects_data.num_detections = num_detections
+            print("sent the detection msg")
             self.box_publisher.publish(self.objects_data)
 
         self.last_tracking_time = self.get_clock().now()
