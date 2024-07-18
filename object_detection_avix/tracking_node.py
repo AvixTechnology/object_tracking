@@ -160,6 +160,7 @@ class TrackingNode(Node):
         self.get_camera_info()
 
         self.get_logger().info(f'*******Object Detection Node started (V1.0.1)**********')
+
     
     # ============service related============
     # region Service Related
@@ -177,6 +178,7 @@ class TrackingNode(Node):
         self.init_gimbal_info= True
 
         self.get_logger().info(f'Camera info get! resolution: ({self.input_width}.{self.input_height})')
+
 
         
 
