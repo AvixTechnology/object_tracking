@@ -159,7 +159,7 @@ class TrackingNode(Node):
         # request the camera info
         self.get_camera_info()
 
-        self.get_logger().info(f'*******Object Dtection Node started (V1.0.1)**********')
+        self.get_logger().info(f'*******Object Dtection Node startedasd (V1.0.1)**********')
     
     # ============service related============
     # region Service Related
@@ -193,7 +193,7 @@ class TrackingNode(Node):
     
     def handle_enable_object_detection(self, request, response):
         if self.state.enabled == request.enable:
-            if request.enabled:
+            if request.enable:
                 response.error_code = 100
             else:
                 response.error_code = 101
