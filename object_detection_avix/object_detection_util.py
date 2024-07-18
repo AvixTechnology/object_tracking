@@ -56,6 +56,7 @@ class botsortConfig():
         self.mot20 = False
         self.cmc_method = 'sparseOptFlow'
         self.ablation = False
+
         self.with_reid = True
         self.fast_reid_config = r"/home/nvidia/tracking_modules/BoT-SORT/fast_reid/configs/Market1501/sbs_R50-ibn.yml"
         self.fast_reid_weights = r"/home/nvidia/tracking_modules/BoT-SORT/pretrained/market_sbs_R50-ibn.pth"

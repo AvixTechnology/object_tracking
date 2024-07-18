@@ -71,7 +71,7 @@ torch.device('cuda' if torch.cuda.is_available() else 'cpu' )
 from dataclasses import dataclass
 @dataclass
 class NodeState:
-    enabled: bool = True
+    enabled: bool = False
     is_intializing: bool = True
     is_detecting: bool = False
     detection_mode: ObjectDetectionMode = ObjectDetectionMode.Yolov8_BotSort
@@ -159,7 +159,8 @@ class TrackingNode(Node):
         # request the camera info
         self.get_camera_info()
 
-        self.get_logger().info(f'*******Object Dtection Node startedasd (V1.0.1)**********')
+        self.get_logger().info(f'*******Object Detection Node started (V1.0.1)**********')
+
     
     # ============service related============
     # region Service Related
@@ -175,6 +176,10 @@ class TrackingNode(Node):
         self.input_width = response.resolution_x
         self.input_height = response.resolution_y
         self.init_gimbal_info= True
+
+        self.get_logger().info(f'Camera info get! resolution: ({self.input_width}.{self.input_height})')
+
+
         
 
     def reset_following_status(self):
@@ -192,6 +197,7 @@ class TrackingNode(Node):
         return response
     
     def handle_enable_object_detection(self, request, response):
+        self.get_logger().info(f"Incoming request {request}")
         if self.state.enabled == request.enable:
             if request.enable:
                 response.error_code = 100
@@ -214,6 +220,7 @@ class TrackingNode(Node):
         
         response.error_code = 0
         response.success = True
+        self.get_logger().info(f"response is {response}")
         return response
     
 
