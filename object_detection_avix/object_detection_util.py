@@ -1,5 +1,6 @@
 
 from ultralytics import YOLO
+
 from copy import deepcopy
 import torch
 torch.cuda.set_device(0) # Set to your desired GPU number
@@ -19,6 +20,12 @@ font_size=None
 font='Arial.ttf'
 pil = False
 rtsp_url = "mot4.mp4"
+
+import json
+import os
+YOLO_ENGINE_FOLDER = '/home/nvidia/avix/models/engine'
+YOLO_CONFIG_FILE = '/home/nvidia/avix/models/yolo_config.json'
+DEFAULT_ENGINE = 'opt.engine'
 
 
 # for reading engin
@@ -67,13 +74,11 @@ class botsortConfig():
         self.appearance_thresh = 0.025
 
 class ReIDTrack():
-    def __init__(self) -> None:
+    def __init__(self, logger) -> None:
         opt = botsortConfig()
-        package_dir = get_package_share_directory('object_detection_avix')
-        
-        # Construct the full path to the .engine file
-        #engine_path = os.path.join(package_dir, 'yolov8s_fp16_736x1280.engine')
-        engine_path = os.path.join(package_dir, 'opt.engine')
+
+
+        engine_path = self.find_engine_file()
         self.model = YOLO(engine_path,task="detect")
         self.tracker = BoTSORT(opt, frame_rate=10.0)
 
@@ -85,6 +90,8 @@ class ReIDTrack():
         # self.yolo_paint_file = open('yolo_paint_results.txt', 'w')
         # self.yolo_all_file = open('yolo_all_results.txt', 'w')
         # self.yolo_model_file = open('yolo_model_results.txt', 'w')
+
+        self.logger = logger
 
         
 
@@ -161,6 +168,33 @@ class ReIDTrack():
         
         return online_targets ,self.yolo_data ,self.BotSort_data
 
+    def find_engine_file(self):
+        default_path = os.path.join(YOLO_ENGINE_FOLDER, "opt.engine")
+        try:
+            with open(YOLO_CONFIG_FILE, 'r') as config_file:
+                config_data = json.load(config_file)
+                engine_name = config_data.get('opt', {}).get('engine')
+                if engine_name:
+                    self.logger.info(f"Found the engine name in the configuration: {engine_name}")
+                    engine_file_path = os.path.join(YOLO_ENGINE_FOLDER, f"{engine_name}.engine")
+                    if os.path.exists(engine_file_path):
+                        self.logger.info(f"Engine file '{engine_file_path}' exists.")
+                        return engine_file_path
+                    else:
+                        self.logger.warn(f"Engine file '{engine_file_path}' does not exist, using default path: {default_path}")
+                        return default_path
+                else:
+                    self.logger.warn(f"Failed to find the engine name in the configuration: {config_data}, using default path: {default_path}")
+                    return default_path
+        except Exception as e:
+            self.logger.warn(f"Failed to read the configuration: {e}, using default path: {default_path}")
+            return default_path
+        
+    def find_id_kf_loc(self,id):
+        # find the location of the id in the tracker
+        for track in self.tracker.lose_stracks:
+            if track.track_id == id:
+                return track.tlbr
 
 class KalmanFilter(object):
     def __init__(self, F = None, B = None, H = None, Q = None, R = None, P = None, x0 = None):

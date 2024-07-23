@@ -47,6 +47,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from avix_utils.msg import  ObjectDetection, ObjectDetections, MQ3State
+from std_msgs.msg import Int32
 import torch
 import cv2
 #from object_detection_util import KalmanFilter ,ReIDTrack
@@ -54,6 +55,7 @@ from object_detection_avix.object_detection_util import ReIDTrack
 from cv_bridge import CvBridge, CvBridgeError
 import numpy as np  
 import time 
+import math
 
 
 
@@ -75,7 +77,12 @@ class NodeState:
     is_intializing: bool = True
     is_detecting: bool = False
     detection_mode: ObjectDetectionMode = ObjectDetectionMode.Yolov8_BotSort
-    
+
+LOSE_TRACKING_FRAME_THRESHOLD = 10
+LOSE_TRACKING_DISTANCE_THRESHOLD = 0.2 # 30% of the image width
+LOSE_TRACKING_SIZE_THRESHOLD = 0.5 # 80% of the size changed
+
+
 class TrackingNode(Node):
     def __init__(self):
         super().__init__('object_tracking_node')
@@ -93,11 +100,27 @@ class TrackingNode(Node):
             self.master_status_callback, 
             10
         )
+
+        self.currentID_subscriber = self.create_subscription(
+            Int32, 
+            avix_common.MQ3_CURRENT_TARGET_ID, 
+            self.currentID_callback, 
+            10
+        )
+
+
     
         # Publisher for the Detections
         self.box_publisher = self.create_publisher(
             ObjectDetections, 
             avix_common.OBJECT_DETECTIONS, 
+            10
+        ) 
+
+        # Publisher for emergency change of ID
+        self.ID_publisher = self.create_publisher(
+            Int32, 
+            avix_common.REID_BACKUP, 
             10
         ) 
 
@@ -132,7 +155,7 @@ class TrackingNode(Node):
         # Initialize CV bridge
         self.bridge = CvBridge()
 
-        self.model=ReIDTrack()
+        self.model=ReIDTrack(self.get_logger())
         # Generate a random image
         random_image = np.random.randint(0, 256, (720, 1280, 3), dtype=np.uint8)
 
@@ -149,6 +172,13 @@ class TrackingNode(Node):
 
         self.detection = ObjectDetection()
         self.objects_data = ObjectDetections()
+
+        # REID related
+        self.currentID = -1
+        self.lastframe_istracking = -1 
+        # -1 means is tracking nothing to be worryed
+        # 0 means lose the target in first frame
+        # 1,2,3 means lose the target after 1,2,3 frame
 
         # intialize the client
         self.cli_gimbal_info = self.create_client(GetGimbalInfo, avix_common.KTG_CAMERA_INFO)
@@ -225,10 +255,24 @@ class TrackingNode(Node):
     
 
     def master_status_callback(self, msg):  
-        # check if the targetid is the same
+        # check if the enable status
         if self.state.enabled != msg.detection_enabled:
             self.get_logger().warn(f'[SEVERE] Following status does not match, current {self.state.enabled} vs master {msg.detection_enabled}. Changing to it...')
             self.state.enabled = msg.detection_enabled
+
+        # check the target id
+        if self.currentID != msg.current_following_id:
+            self.get_logger().warn(f'[SEVERE] Target ID does not match, current {self.currentID} vs master {msg.target_id}. Changing to it...')
+            self.currentID = msg.current_following_id
+
+    # endregion
+
+    # ============REID related============
+    # region REID related
+    def currentID_callback(self, msg):
+        self.currentID = msg.data
+        self.get_logger().info(f"Current ID: {self.currentID}")
+
     # endregion
 
     # ============image related============
@@ -277,6 +321,8 @@ class TrackingNode(Node):
         # print("tracktime: " , track_time-readtime)
         self.objects_data = ObjectDetections()
 
+        detected = False
+        # if tracking ID is missing
         for t in results:
             self.detection = ObjectDetection()
             tlbr = t.tlbr
@@ -294,8 +340,30 @@ class TrackingNode(Node):
 
             self.objects_data.detections.append(self.detection)
 
+            # REID check
+            if tid == self.currentID:
+                self.lastframe_istracking = 0
+                detected = True
+        
+        # if we have not detected object and we had last frame
+        if not detected and self.lastframe_istracking >= 0:
+            # we try to find the one that match
+            new_id = self.retrieve_target()
+            if new_id is not None:
+                # publish the new id
+                self.ID_publisher.publish(Int32(data=new_id))
+                self.currentID = new_id
+                self.logger.warn(f"AUTO REID: New ID: {self.currentID}")
+                self.lastframe_istracking = 0
+            else:
+                self.lastframe_istracking+=1
+
+                if self.lastframe_istracking > LOSE_TRACKING_FRAME_THRESHOLD: # which means the target has been lost for 5 frames
+                    self.lastframe_istracking = -1
+                    self.get_logger().warn(f"Cannot retrieve target {self.currentID}. Resetting tracking.")
+
         #self.get_logger().info(f'object data: {objects_data}')
-        print(num_detections)
+        #print(num_detections)
         if(num_detections>0): 
             self.objects_data.num_detections = num_detections
             print("sent the detection msg")
@@ -309,7 +377,36 @@ class TrackingNode(Node):
     # endregion
 
 
+    def retrieve_target(self,results):
+        # we go through the detection to see if there is one close enough to the id KF buffer
+        (x1,y1,x2,y2) = self.model.find_id_kf_loc(self.currentID) # we got the tlbr of the target
+        target_center = ((x1 + x2) / 2, (y1 + y2) / 2)
+        target_size = (x2 - x1, y2 - y1)
+        for t in results:
+            (tx1,ty1,tx2,ty2) = t.tlbr
+            tid = t.track_id
+            detection_center = ((tx1 + tx2) / 2, (ty1 + ty2) / 2)
+            detection_size = (tx2 - tx1, ty2 - ty1)
 
+            # Calculate the Euclidean distance between the centers
+            distance = math.sqrt((detection_center[0] - target_center[0]) ** 2 +
+                                 (detection_center[1] - target_center[1]) ** 2)
+
+            # Calculate size changes
+            width_change = abs(detection_size[0] - target_size[0]) / target_size[0]
+            height_change = abs(detection_size[1] - target_size[1]) / target_size[1]
+
+            # Check if the size change exceeds the threshold
+            size_changed = width_change > LOSE_TRACKING_SIZE_THRESHOLD or height_change > LOSE_TRACKING_SIZE_THRESHOLD
+
+            # Check if the distance exceeds the threshold
+            moved= distance > LOSE_TRACKING_DISTANCE_THRESHOLD
+
+            if not size_changed and not moved:
+                # The detection is within acceptable thresholds
+                return tid
+
+        return None
 
 def main(args=None):
     rclpy.init(args=args)
