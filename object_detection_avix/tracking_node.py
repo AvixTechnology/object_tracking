@@ -400,7 +400,7 @@ class TrackingNode(Node):
             size_changed = width_change > LOSE_TRACKING_SIZE_THRESHOLD or height_change > LOSE_TRACKING_SIZE_THRESHOLD
 
             # Check if the distance exceeds the threshold
-            moved= distance > LOSE_TRACKING_DISTANCE_THRESHOLD
+            moved= distance > LOSE_TRACKING_DISTANCE_THRESHOLD * self.input_width
 
             if not size_changed and not moved:
                 # The detection is within acceptable thresholds
