@@ -424,6 +424,7 @@ class TrackingNode(Node):
 
             self.objects_data.detections.append(self.detection)
 
+<<<<<<< HEAD
             # REID check (if enabled)
             if self.spatial_REID_enabled:
                 if tid == self.currentID:
@@ -450,6 +451,29 @@ class TrackingNode(Node):
                         # now we need to zoom out for a bit
 
                         self.zoom_out()
+=======
+            # REID check
+            if tid == self.currentID:
+                self.lastframe_istracking = 0
+                detected = True
+        
+        # if we have not detected object and we had last frame
+        if not detected and self.lastframe_istracking >= 0:
+            # we try to find the one that match
+            new_id = self.retrieve_target(results)
+            if new_id is not None:
+                # publish the new id
+                self.ID_publisher.publish(Int32(data=new_id))
+                self.currentID = new_id
+                self.logger.warn(f"AUTO REID: New ID: {self.currentID}")
+                self.lastframe_istracking = 0
+            else:
+                self.lastframe_istracking+=1
+
+                if self.lastframe_istracking > LOSE_TRACKING_FRAME_THRESHOLD: # which means the target has been lost for 5 frames
+                    self.lastframe_istracking = -1
+                    self.get_logger().warn(f"Cannot retrieve target {self.currentID}. Resetting tracking.")
+>>>>>>>  fix the engine name for set_config
 
         #self.get_logger().info(f'object data: {objects_data}')
         #print(num_detections)
