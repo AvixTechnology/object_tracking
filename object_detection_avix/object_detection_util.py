@@ -65,8 +65,8 @@ class botsortConfig():
         self.ablation = False
 
         self.with_reid = True
-        self.fast_reid_config = r"/home/nvidia/tracking_modules/BoT-SORT/fast_reid/configs/Market1501/sbs_R50-ibn.yml"
-        self.fast_reid_weights = r"/home/nvidia/tracking_modules/BoT-SORT/pretrained/market_sbs_R50-ibn.pth"
+        self.fast_reid_config = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/fast_reid/configs/Market1501/sbs_R50-ibn.yml"
+        self.fast_reid_weights = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/pretrained/market_sbs_R50-ibn.pth"
         #self.fast_reid_config = r"/home/nvidia/tracking_modules/BoT-SORT/fast_reid/configs/MOT17/sbs_S50.yml"
         #self.fast_reid_weights = r"/home/nvidia/tracking_modules/BoT-SORT/pretrained/mot17_sbs_S50.pth"
     
@@ -76,7 +76,7 @@ class botsortConfig():
 class ReIDTrack():
     def __init__(self, logger) -> None:
         opt = botsortConfig()
-
+        self.logger = logger
 
         engine_path = self.find_engine_file()
         self.model = YOLO(engine_path,task="detect")
@@ -91,7 +91,7 @@ class ReIDTrack():
         # self.yolo_all_file = open('yolo_all_results.txt', 'w')
         # self.yolo_model_file = open('yolo_model_results.txt', 'w')
 
-        self.logger = logger
+        
 
         
 
@@ -176,7 +176,7 @@ class ReIDTrack():
                 engine_name = config_data.get('opt', {}).get('engine')
                 if engine_name:
                     self.logger.info(f"Found the engine name in the configuration: {engine_name}")
-                    engine_file_path = os.path.join(YOLO_ENGINE_FOLDER, f"{engine_name}.engine")
+                    engine_file_path = os.path.join(YOLO_ENGINE_FOLDER, f"{engine_name}")
                     if os.path.exists(engine_file_path):
                         self.logger.info(f"Engine file '{engine_file_path}' exists.")
                         return engine_file_path
@@ -192,7 +192,7 @@ class ReIDTrack():
         
     def find_id_kf_loc(self,id):
         # find the location of the id in the tracker
-        for track in self.tracker.lose_stracks:
+        for track in self.tracker.lost_stracks:
             if track.track_id == id:
                 return track.tlbr
 
