@@ -61,8 +61,8 @@ import math
 
 
 # for reading engine
-from avix_utils.avix_enums import ObjectDetectionMode
-from avix_utils import avix_common
+from avix_utils_py.avix_enums import ObjectDetectionMode
+from avix_utils_py import avix_common
 from avix_utils.srv import ObjectDetectionStatus, EnableFunction, GetGimbalInfo
 
 torch.cuda.device(0)
@@ -348,7 +348,7 @@ class TrackingNode(Node):
         # if we have not detected object and we had last frame
         if not detected and self.lastframe_istracking >= 0:
             # we try to find the one that match
-            new_id = self.retrieve_target()
+            new_id = self.retrieve_target(results)
             if new_id is not None:
                 # publish the new id
                 self.ID_publisher.publish(Int32(data=new_id))
