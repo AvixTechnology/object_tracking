@@ -289,8 +289,18 @@ class TrackingNode(Node):
         self.get_logger().info(f"Current ID: {self.currentID}")
 
     def retrieve_target(self,results):
+        # speed up
+        if results is None:
+            return None
+        
         # we go through the detection to see if there is one close enough to the id KF buffer
-        (x1,y1,x2,y2) = self.model.find_id_kf_loc(self.currentID) # we got the tlbr of the target
+        kf_target = self.model.find_id_kf_loc(self.currentID)
+        
+        # if not, we just return None
+        if kf_target is None:
+            return None
+        
+        (x1,y1,x2,y2) = kf_target # we got the tlbr of the target
         target_center = ((x1 + x2) / 2, (y1 + y2) / 2)
         target_size = (x2 - x1, y2 - y1)
         for t in results:

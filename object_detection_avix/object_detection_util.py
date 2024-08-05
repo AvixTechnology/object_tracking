@@ -195,6 +195,8 @@ class ReIDTrack():
         for track in self.tracker.lost_stracks:
             if track.track_id == id:
                 return track.tlbr
+            
+        return None
 
 class KalmanFilter(object):
     def __init__(self, F = None, B = None, H = None, Q = None, R = None, P = None, x0 = None):
