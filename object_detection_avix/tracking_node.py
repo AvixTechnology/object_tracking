@@ -78,9 +78,9 @@ class NodeState:
     is_detecting: bool = False
     detection_mode: ObjectDetectionMode = ObjectDetectionMode.Yolov8_BotSort
 
-LOSE_TRACKING_FRAME_THRESHOLD = 10
-LOSE_TRACKING_DISTANCE_THRESHOLD = 0.2 # 30% of the image width
-LOSE_TRACKING_SIZE_THRESHOLD = 0.5 # 80% of the size changed
+LOSE_TRACKING_FRAME_THRESHOLD = 15
+LOSE_TRACKING_DISTANCE_THRESHOLD = 0.3 # 30% of the image width
+LOSE_TRACKING_SIZE_THRESHOLD = 0.4 # 80% of the size changed
 
 
 class TrackingNode(Node):
@@ -95,7 +95,7 @@ class TrackingNode(Node):
         self.image_subscriber = self.create_subscription(
             Image, 
             avix_common.KTG_EO_IMG, 
-            self.image_callback, 
+            self.image_callback,   
             10
         )
 
@@ -275,10 +275,9 @@ class TrackingNode(Node):
             self.state.enabled = msg.detection_enabled
 
         # check the target id
-        if self.spatial_REID_enabled:
-            if self.currentID != msg.current_following_id:
-                self.get_logger().warn(f'[SEVERE] Target ID does not match, current {self.currentID} vs master {msg.target_id}. Changing to it...')
-                self.currentID = msg.current_following_id
+        if self.currentID != msg.current_following_id:
+            self.get_logger().warn(f'[SEVERE] Target ID does not match, current {self.currentID} vs master {msg.current_following_id}. Changing to it...')
+            self.currentID = msg.current_following_id
 
     # endregion
 
