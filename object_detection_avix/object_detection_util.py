@@ -56,7 +56,7 @@ class botsortConfig():
         self.track_high_thresh = 0.6
         self.track_low_thresh = 0.1   
         self.new_track_thresh = 0.3
-        self.track_buffer = 30
+        self.track_buffer = 100
         self.match_thresh = 0.9
         self.aspect_ratio_thresh = 1.6
         self.min_box_area = 10
@@ -65,13 +65,13 @@ class botsortConfig():
         self.ablation = False
 
         self.with_reid = True
-        self.fast_reid_config = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/fast_reid/configs/Market1501/sbs_R50-ibn.yml"
-        self.fast_reid_weights = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/pretrained/market_sbs_R50-ibn.pth"
-        #self.fast_reid_config = r"/home/nvidia/tracking_modules/BoT-SORT/fast_reid/configs/MOT17/sbs_S50.yml"
-        #self.fast_reid_weights = r"/home/nvidia/tracking_modules/BoT-SORT/pretrained/mot17_sbs_S50.pth"
+        # self.fast_reid_config = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/fast_reid/configs/Market1501/sbs_R50-ibn.yml"
+        # self.fast_reid_weights = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/pretrained/market_sbs_R50-ibn.pth"
+        self.fast_reid_config = r"/home/nvidia/tracking_modules/BoT-SORT/fast_reid/configs/Market1501/sbs_R50-ibn.yml"
+        self.fast_reid_weights = r"/home/nvidia/tracking_modules/BoT-SORT/pretrained/market_sbs_R50-ibn.pth"
     
-        self.proximity_thresh = 0.05
-        self.appearance_thresh = 0.025
+        self.proximity_thresh = 0.4
+        self.appearance_thresh = 0.15
 
 class ReIDTrack():
     def __init__(self, logger) -> None:

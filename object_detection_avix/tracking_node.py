@@ -78,9 +78,9 @@ class NodeState:
     is_detecting: bool = False
     detection_mode: ObjectDetectionMode = ObjectDetectionMode.Yolov8_BotSort
 
-LOSE_TRACKING_FRAME_THRESHOLD = 10
-LOSE_TRACKING_DISTANCE_THRESHOLD = 0.2 # 30% of the image width
-LOSE_TRACKING_SIZE_THRESHOLD = 0.5 # 80% of the size changed
+LOSE_TRACKING_FRAME_THRESHOLD = 15
+LOSE_TRACKING_DISTANCE_THRESHOLD = 0.3 # 30% of the image width
+LOSE_TRACKING_SIZE_THRESHOLD = 0.6 # 80% of the size changed
 
 
 class TrackingNode(Node):
@@ -95,7 +95,7 @@ class TrackingNode(Node):
         self.image_subscriber = self.create_subscription(
             Image, 
             avix_common.KTG_EO_IMG, 
-            self.image_callback, 
+            self.image_callback,   
             10
         )
 
@@ -275,10 +275,9 @@ class TrackingNode(Node):
             self.state.enabled = msg.detection_enabled
 
         # check the target id
-        if self.spatial_REID_enabled:
-            if self.currentID != msg.current_following_id:
-                self.get_logger().warn(f'[SEVERE] Target ID does not match, current {self.currentID} vs master {msg.target_id}. Changing to it...')
-                self.currentID = msg.current_following_id
+        if self.currentID != msg.current_following_id:
+            self.get_logger().warn(f'[SEVERE] Target ID does not match, current {self.currentID} vs master {msg.current_following_id}. Changing to it...')
+            self.currentID = msg.current_following_id
 
     # endregion
 
@@ -303,6 +302,7 @@ class TrackingNode(Node):
         (x1,y1,x2,y2) = kf_target # we got the tlbr of the target
         target_center = ((x1 + x2) / 2, (y1 + y2) / 2)
         target_size = (x2 - x1, y2 - y1)
+        passed_object = {}
         for t in results:
             (tx1,ty1,tx2,ty2) = t.tlbr
             tid = t.track_id
@@ -312,7 +312,7 @@ class TrackingNode(Node):
             # Calculate the Euclidean distance between the centers
             distance = math.sqrt((detection_center[0] - target_center[0]) ** 2 +
                                  (detection_center[1] - target_center[1]) ** 2)
-
+            
             # Calculate size changes
             width_change = abs(detection_size[0] - target_size[0]) / target_size[0]
             height_change = abs(detection_size[1] - target_size[1]) / target_size[1]
@@ -322,10 +322,27 @@ class TrackingNode(Node):
 
             # Check if the distance exceeds the threshold
             moved= distance > LOSE_TRACKING_DISTANCE_THRESHOLD * self.input_width
+            # print("distance " , distance)
+            # print("LOSE_TRACKING_DISTANCE_THRESHOLD * self.input_width",LOSE_TRACKING_DISTANCE_THRESHOLD * self.input_width)
+            # print("detection_center",detection_center)
+            # print("target_center", target_center)
 
+            # print("moved", moved)
+            # print("detection_size",detection_size)
+            # print("width_change" , width_change)
+            # print("height_change", height_change)
+            # print("size_changed", size_changed)
             if not size_changed and not moved:
                 # The detection is within acceptable thresholds
-                return tid
+                passed_object[tid] = distance
+        
+
+        print(passed_object)
+        
+        # check if passed_object is none
+        if passed_object:
+            min_id = min(passed_object,key=passed_object.get)
+            return min_id
 
         return None
 
@@ -413,16 +430,17 @@ class TrackingNode(Node):
                 if tid == self.currentID:
                     self.lastframe_istracking = 0
                     detected = True
+
         if self.spatial_REID_enabled:
             # if we have not detected object and we had last frame
-            if not detected and self.lastframe_istracking >= 0:
+            if not detected and self.lastframe_istracking >= 3:
                 # we try to find the one that match
                 new_id = self.retrieve_target(results)
                 if new_id is not None:
                     # publish the new id
                     self.ID_publisher.publish(Int32(data=new_id))
                     self.currentID = new_id
-                    self.logger.warn(f"AUTO REID: New ID: {self.currentID}")
+                    self.get_logger().warn(f"AUTO REID: New ID: {self.currentID}")
                     self.lastframe_istracking = 0
                 else:
                     self.lastframe_istracking+=1
@@ -434,6 +452,8 @@ class TrackingNode(Node):
                         # now we need to zoom out for a bit
 
                         self.zoom_out()
+            elif not detected and self.lastframe_istracking >=0:
+                self.lastframe_istracking+=1
 
         #self.get_logger().info(f'object data: {objects_data}')
         #print(num_detections)
