@@ -79,6 +79,7 @@ class NodeState:
     detection_mode: ObjectDetectionMode = ObjectDetectionMode.Yolov8_BotSort
 
 LOSE_TRACKING_FRAME_THRESHOLD = 15
+LOSE_TRACKING_FRAME_THRESHOLD_AFTER_ZOOM = 10
 LOSE_TRACKING_DISTANCE_THRESHOLD = 0.3 # 30% of the image width
 LOSE_TRACKING_SIZE_THRESHOLD = 0.6 # 80% of the size changed
 
@@ -86,6 +87,7 @@ LOSE_TRACKING_SIZE_THRESHOLD = 0.6 # 80% of the size changed
 class TrackingNode(Node):
     def __init__(self):
         super().__init__('object_tracking_node')
+        print("flag1")
 
         # declare parameters
         self.declare_parameter('enable_spatial_REID', True) # won't move if target is too deviated
@@ -96,6 +98,13 @@ class TrackingNode(Node):
             Image, 
             avix_common.KTG_EO_IMG, 
             self.image_callback,   
+            10
+        )
+        self.eo_zoom=1
+        self.ktg_info_subscriber = self.create_subscription(
+            Image, 
+            avix_common.KTG_INFO, 
+            self.ktg_info_callback,   
             10
         )
 
@@ -189,8 +198,13 @@ class TrackingNode(Node):
         # REID related
         self.currentID = -1
         self.lastframe_istracking = -1 
+<<<<<<< HEAD
         self.imageCount = 0 # for skipping frames
         self.time_elapsed = 0 # for skipping frames
+=======
+        self.lastframe_istracking_after_zoom_out=-1
+        self.zooming_flag=False
+>>>>>>> extra find 10 frames after zooming out
       
         # -1 means is tracking nothing to be worryed
         # 0 means lose the target in first frame
@@ -205,7 +219,7 @@ class TrackingNode(Node):
         # request the camera info
         self.get_camera_info()
 
-        self.get_logger().info(f'*******Object Detection Node started (V1.0.1)**********')
+        self.get_logger().info(f'*******Object Detection Node startedasd (V1.0.1)**********')
 
     
     # ============service related============
@@ -270,6 +284,8 @@ class TrackingNode(Node):
         self.get_logger().info(f"response is {response}")
         return response
     
+    def ktg_info_callback(self,msg):
+        self.eo_zoom=msg.eo_zoom
 
     def master_status_callback(self, msg):  
         # check if the enable status
@@ -290,7 +306,7 @@ class TrackingNode(Node):
         self.currentID = msg.data
         self.get_logger().info(f"Current ID: {self.currentID}")
 
-    def retrieve_target(self,results):
+    def retrieve_target(self,results, zoom_flag=False):
         # speed up
         if results is None:
             return None
@@ -302,6 +318,14 @@ class TrackingNode(Node):
         if kf_target is None:
             return None
         
+        # for the zoom out action
+        if self.eo_zoom==1 or not zoom_flag:
+            zoom_change=1
+        else:
+            zoom_change=(self.eo_zoom)**(1/2)
+
+
+
         (x1,y1,x2,y2) = kf_target # we got the tlbr of the target
         target_center = ((x1 + x2) / 2, (y1 + y2) / 2)
         target_size = (x2 - x1, y2 - y1)
@@ -317,8 +341,8 @@ class TrackingNode(Node):
                                  (detection_center[1] - target_center[1]) ** 2)
             
             # Calculate size changes
-            width_change = abs(detection_size[0] - target_size[0]) / target_size[0]
-            height_change = abs(detection_size[1] - target_size[1]) / target_size[1]
+            width_change = abs(detection_size[0] - target_size[0]) / target_size[0] /zoom_change
+            height_change = abs(detection_size[1] - target_size[1]) / target_size[1] /zoom_change
 
             # Check if the size change exceeds the threshold
             size_changed = width_change > LOSE_TRACKING_SIZE_THRESHOLD or height_change > LOSE_TRACKING_SIZE_THRESHOLD
@@ -446,6 +470,7 @@ class TrackingNode(Node):
             if self.spatial_REID_enabled:
                 if tid == self.currentID:
                     self.lastframe_istracking = 0
+                    self.lastframe_istracking_after_zoom_out=0
                     detected = True
 
         if self.spatial_REID_enabled:
@@ -469,6 +494,7 @@ class TrackingNode(Node):
                         # now we need to zoom out for a bit
 
                         self.zoom_out()
+<<<<<<< HEAD
 <<<<<<< HEAD
 =======
             # REID check
@@ -497,6 +523,30 @@ class TrackingNode(Node):
             elif not detected and self.lastframe_istracking >=0:
                 self.lastframe_istracking+=1
 >>>>>>> commit the print value
+=======
+                        self.zooming_flag=True
+
+            elif not detected and self.lastframe_istracking >=0 :
+                self.lastframe_istracking+=1
+            # for the search after zoom out 
+            elif not detected and self.lastframe_istracking== -1 and self.zooming_flag:
+                new_id = self.retrieve_target(results, zoom_flag=True)
+                if new_id is not None:
+                    # publish the new id
+                    self.ID_publisher.publish(Int32(data=new_id))
+                    self.currentID = new_id
+                    self.get_logger().warn(f"AUTO REID: New ID: {self.currentID}")
+                    self.lastframe_istracking = 0
+                    self.lastframe_istracking_after_zoom_out=0
+                    self.zooming_flag=False
+
+                elif self.lastframe_istracking_after_zoom_out<LOSE_TRACKING_FRAME_THRESHOLD_AFTER_ZOOM:
+                    self.lastframe_istracking_after_zoom_out+=1
+                elif  self.lastframe_istracking_after_zoom_out>= LOSE_TRACKING_FRAME_THRESHOLD_AFTER_ZOOM:
+                    self.get_logger().warn(f"Cannot retrieve target {self.currentID}. Resetting tracking.")
+                    self.zooming_flag=False
+                
+>>>>>>> extra find 10 frames after zooming out
 
         #self.get_logger().info(f'object data: {objects_data}')
         #print(num_detections)
