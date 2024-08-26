@@ -73,7 +73,7 @@ torch.device('cuda' if torch.cuda.is_available() else 'cpu' )
 from dataclasses import dataclass
 @dataclass
 class NodeState:
-    enabled: bool = False
+    enabled: bool = True
     is_intializing: bool = True
     is_detecting: bool = False
     detection_mode: ObjectDetectionMode = ObjectDetectionMode.Yolov8_BotSort
@@ -189,6 +189,8 @@ class TrackingNode(Node):
         # REID related
         self.currentID = -1
         self.lastframe_istracking = -1 
+        self.imageCount = 0 # for skipping frames
+        self.time_elapsed = 0 # for skipping frames
       
         # -1 means is tracking nothing to be worryed
         # 0 means lose the target in first frame
@@ -219,6 +221,7 @@ class TrackingNode(Node):
         response = future.result()
         self.input_width = response.resolution_x
         self.input_height = response.resolution_y
+        self.fps = response.fps
         self.init_gimbal_info= True
 
         self.get_logger().info(f'Camera info get! resolution: ({self.input_width}.{self.input_height})')
@@ -346,9 +349,22 @@ class TrackingNode(Node):
     # ============image related============
     # region image related
     def image_callback(self, msg):
+        self.imageCount += 1
+        if self.time_elapsed>1:
+            if self.imageCount < self.fps:
+                print(self.imageCount)
+                print(self.time_elapsed)
+                return
+            if self.imageCount >= self.fps:
+                self.time_elapsed=0
+                self.imageCount = 1
+                print("renew fps")
+            
+        
+
         start =time.time()
         # not run the model if not initialized
-        if self.state.is_intializing:
+        if  self.state.is_intializing:
             return
 
         # not run the model if tracking is disabled
@@ -446,6 +462,7 @@ class TrackingNode(Node):
         self.state.is_detecting = True
 
         end =time.time()
+        self.time_elapsed += (end - start)
         self.get_logger().info(f"all time : { end - start} ")
     # endregion
 
