@@ -198,13 +198,10 @@ class TrackingNode(Node):
         # REID related
         self.currentID = -1
         self.lastframe_istracking = -1 
-<<<<<<< HEAD
         self.imageCount = 0 # for skipping frames
         self.time_elapsed = 0 # for skipping frames
-=======
         self.lastframe_istracking_after_zoom_out=-1
         self.zooming_flag=False
->>>>>>> extra find 10 frames after zooming out
       
         # -1 means is tracking nothing to be worryed
         # 0 means lose the target in first frame
@@ -465,7 +462,7 @@ class TrackingNode(Node):
 
             self.objects_data.detections.append(self.detection)
 
-<<<<<<< HEAD
+
             # REID check (if enabled)
             if self.spatial_REID_enabled:
                 if tid == self.currentID:
@@ -494,9 +491,7 @@ class TrackingNode(Node):
                         # now we need to zoom out for a bit
 
                         self.zoom_out()
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
+
             # REID check
             if tid == self.currentID:
                 self.lastframe_istracking = 0
@@ -518,35 +513,32 @@ class TrackingNode(Node):
                 if self.lastframe_istracking > LOSE_TRACKING_FRAME_THRESHOLD: # which means the target has been lost for 5 frames
                     self.lastframe_istracking = -1
                     self.get_logger().warn(f"Cannot retrieve target {self.currentID}. Resetting tracking.")
->>>>>>>  fix the engine name for set_config
-=======
-            elif not detected and self.lastframe_istracking >=0:
-                self.lastframe_istracking+=1
->>>>>>> commit the print value
-=======
-                        self.zooming_flag=True
 
-            elif not detected and self.lastframe_istracking >=0 :
-                self.lastframe_istracking+=1
-            # for the search after zoom out 
-            elif not detected and self.lastframe_istracking== -1 and self.zooming_flag:
-                new_id = self.retrieve_target(results, zoom_flag=True)
-                if new_id is not None:
-                    # publish the new id
-                    self.ID_publisher.publish(Int32(data=new_id))
-                    self.currentID = new_id
-                    self.get_logger().warn(f"AUTO REID: New ID: {self.currentID}")
-                    self.lastframe_istracking = 0
-                    self.lastframe_istracking_after_zoom_out=0
-                    self.zooming_flag=False
+        elif not detected and self.lastframe_istracking >=0:
+            self.lastframe_istracking+=1
 
-                elif self.lastframe_istracking_after_zoom_out<LOSE_TRACKING_FRAME_THRESHOLD_AFTER_ZOOM:
-                    self.lastframe_istracking_after_zoom_out+=1
-                elif  self.lastframe_istracking_after_zoom_out>= LOSE_TRACKING_FRAME_THRESHOLD_AFTER_ZOOM:
-                    self.get_logger().warn(f"Cannot retrieve target {self.currentID}. Resetting tracking.")
-                    self.zooming_flag=False
+            self.zooming_flag=True
+
+        elif not detected and self.lastframe_istracking >=0 :
+            self.lastframe_istracking+=1
+        # for the search after zoom out 
+        elif not detected and self.lastframe_istracking== -1 and self.zooming_flag:
+            new_id = self.retrieve_target(results, zoom_flag=True)
+            if new_id is not None:
+                # publish the new id
+                self.ID_publisher.publish(Int32(data=new_id))
+                self.currentID = new_id
+                self.get_logger().warn(f"AUTO REID: New ID: {self.currentID}")
+                self.lastframe_istracking = 0
+                self.lastframe_istracking_after_zoom_out=0
+                self.zooming_flag=False
+
+            elif self.lastframe_istracking_after_zoom_out<LOSE_TRACKING_FRAME_THRESHOLD_AFTER_ZOOM:
+                self.lastframe_istracking_after_zoom_out+=1
+            elif  self.lastframe_istracking_after_zoom_out>= LOSE_TRACKING_FRAME_THRESHOLD_AFTER_ZOOM:
+                self.get_logger().warn(f"Cannot retrieve target {self.currentID}. Resetting tracking.")
+                self.zooming_flag=False
                 
->>>>>>> extra find 10 frames after zooming out
 
         #self.get_logger().info(f'object data: {objects_data}')
         #print(num_detections)
