@@ -514,52 +514,6 @@ class TrackingNode(Node):
                     self.zooming_flag=False
                 
 
-            # REID check
-            if tid == self.currentID:
-                self.lastframe_istracking = 0
-                detected = True
-        
-        # if we have not detected object and we had last frame
-        if not detected and self.lastframe_istracking >= 0:
-            # we try to find the one that match
-            new_id = self.retrieve_target(results)
-            if new_id is not None:
-                # publish the new id
-                self.ID_publisher.publish(Int32(data=new_id))
-                self.currentID = new_id
-                self.logger.warn(f"AUTO REID: New ID: {self.currentID}")
-                self.lastframe_istracking = 0
-            else:
-                self.lastframe_istracking+=1
-
-                if self.lastframe_istracking > LOSE_TRACKING_FRAME_THRESHOLD: # which means the target has been lost for 5 frames
-                    self.lastframe_istracking = -1
-                    self.get_logger().warn(f"Cannot retrieve target {self.currentID}. Resetting tracking.")
-
-        elif not detected and self.lastframe_istracking >=0:
-            self.lastframe_istracking+=1
-
-            self.zooming_flag=True
-
-        elif not detected and self.lastframe_istracking >=0 :
-            self.lastframe_istracking+=1
-        # for the search after zoom out 
-        elif not detected and self.lastframe_istracking== -1 and self.zooming_flag:
-            new_id = self.retrieve_target(results, zoom_flag=True)
-            if new_id is not None:
-                # publish the new id
-                self.ID_publisher.publish(Int32(data=new_id))
-                self.currentID = new_id
-                self.get_logger().warn(f"AUTO REID: New ID: {self.currentID}")
-                self.lastframe_istracking = 0
-                self.lastframe_istracking_after_zoom_out=0
-                self.zooming_flag=False
-
-            elif self.lastframe_istracking_after_zoom_out<LOSE_TRACKING_FRAME_THRESHOLD_AFTER_ZOOM:
-                self.lastframe_istracking_after_zoom_out+=1
-            elif  self.lastframe_istracking_after_zoom_out>= LOSE_TRACKING_FRAME_THRESHOLD_AFTER_ZOOM:
-                self.get_logger().warn(f"Cannot retrieve target {self.currentID}. Resetting tracking.")
-                self.zooming_flag=False
                 
 
         #self.get_logger().info(f'object data: {objects_data}')
