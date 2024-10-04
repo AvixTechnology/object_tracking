@@ -56,22 +56,24 @@ class botsortConfig():
         self.track_high_thresh = 0.6
         self.track_low_thresh = 0.1   
         self.new_track_thresh = 0.3
-        self.track_buffer = 100
+        self.track_buffer = 200
         self.match_thresh = 0.9
         self.aspect_ratio_thresh = 1.6
         self.min_box_area = 10
         self.mot20 = False
-        self.cmc_method = 'sparseOptFlow'
+        self.cmc_method = 'orb'
+        # self.cmc_method = 'sparseOptFlow'
         self.ablation = False
-
         self.with_reid = True
         self.fast_reid_config = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/fast_reid/configs/Market1501/sbs_R50-ibn.yml"
         self.fast_reid_weights = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/pretrained/market_sbs_R50-ibn.pth"
         # self.fast_reid_config = r"/home/nvidia/tracking_modules/BoT-SORT/fast_reid/configs/Market1501/sbs_R50-ibn.yml"
-        # self.fast_reid_weights = r"/home/nvidia/tracking_modules/BoT-SORT/pretrained/market_sbs_R50-ibn.pth"
+        #self.fast_reid_weights = r"/home/nvidia/tracking_modules/BoT-SORT/pretrained/market_sbs_R50-ibn.pth"
+        self.fast_reid_weights = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/pretrained/my_modelv2.engine"
+        
     
-        self.proximity_thresh = 0.4
-        self.appearance_thresh = 0.15
+        self.proximity_thresh = 0.2
+        self.appearance_thresh = 0.2
 
 class ReIDTrack():
     def __init__(self, logger) -> None:
@@ -99,10 +101,10 @@ class ReIDTrack():
         self.yolo_data = []
         self.BotSort_data = []
         tic = time.time()
-        results = self.model.predict(source = frame ,conf=0.3, classes=[0,1,2,3],imgsz=(480,640),verbose=False, half = True, device="cuda:0",)
+        results = self.model.predict(source = frame ,conf=0.3, classes=[0,1,2,3,41],imgsz=640,verbose=False, half = True, device="cuda:0",)
         #print(results[0].boxes)    
-        toc = time.time()
-        predict_time=toc - tic
+        # toc = time.time()
+        # predict_time=toc - tic
         # print(f"predict time {toc - tic}")    
         boxes = results[0].boxes
         
@@ -113,16 +115,16 @@ class ReIDTrack():
 
         #save yolo data  with bboxes, scores, classes as a csv file 
         
-        self.yolo_data.append( [predict_time/1.0 , bboxes, scores,  classes])
+        # self.yolo_data.append( [predict_time/1.0 , bboxes, scores,  classes])
        
 
 
         # Constructing the 2D list
         detection_list = np.column_stack((bboxes, scores, classes, np.zeros(len(bboxes))))
         online_targets = self.tracker.update(detection_list,results[0].orig_img)
-        toc2 = time.time()
-
-        update_time=toc2-toc
+        
+        # toc2 = time.time()
+        # update_time=toc2-toc
         # print(f"update time {toc2 - toc}")  
         
         annotator = Annotator(
@@ -142,7 +144,7 @@ class ReIDTrack():
             c,  id = int(tcls), int(tid)
             label =  ('' if id is None else f'id:{id} ') + results[0].names[c]
             annotator.box_label(tlbr, label, color=colors(c, True))  
-            self.BotSort_data.append([update_time, results[0].names[c], id,  tlbr])
+            # self.BotSort_data.append([update_time, results[0].names[c], id,  tlbr])
 
         annotated_frame = annotator.result()
         annotated_frame = cv2.resize(annotated_frame,(640,384))

@@ -172,7 +172,7 @@ class TrackingNode(Node):
         if(not torch.cuda.is_available()):
             self.get_logger().error(f'Pytorch has no cuda support, please reinstall')
 
-        self.get_logger().info(f'Initializing Model...')
+        self.get_logger().info(f'Initializing Model11...')
 
         # Initialize CV bridge
         self.bridge = CvBridge()
@@ -431,8 +431,18 @@ class TrackingNode(Node):
             cv_image = cv2.resize(cv_image, (self.input_width, self.input_height))
 
         # do the tracking
+        # tic1 = time.time()
+        # print("after cv bridge:", tic1 -start  )
+
+        #  apply_feature (GMC) will report the error when the feature is not enough 
+        try:
+            results , _ , _ = self.model.track(cv_image)
+        except Exception as e :
+            print("GMC error", e)
+            return
         
-        results , _ , _ = self.model.track(cv_image)
+        # tic2 =time.time()
+        # print("after track:" , tic2 - tic1)
         # Prepare the objects' data
 
         num_detections = 0
@@ -445,6 +455,7 @@ class TrackingNode(Node):
 
         detected = False
         # if tracking ID is missing
+        # print("length ", len(results))
         for t in results:
             self.detection = ObjectDetection()
             tlbr = t.tlbr
@@ -513,7 +524,8 @@ class TrackingNode(Node):
                     self.get_logger().warn(f"Cannot retrieve target {self.currentID}. Resetting tracking.")
                     self.zooming_flag=False
                 
-
+        # tic3 =time.time()
+        # print("after the reid save :", tic3 -tic2)
                 
 
         #self.get_logger().info(f'object data: {objects_data}')
