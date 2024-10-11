@@ -461,7 +461,7 @@ class TrackingNode(Node):
             tlbr = t.tlbr
             tid = t.track_id
             tcls = t.cls
-            c,  id = int(tcls), int(tid) %128
+            c,  id = int(tcls), int(tid) 
             x1,y1,x2,y2=tlbr[0],tlbr[1],tlbr[2],tlbr[3]
 
 
@@ -532,6 +532,7 @@ class TrackingNode(Node):
         #print(num_detections)
         if(num_detections>0): 
             self.objects_data.num_detections = num_detections
+            self.objects_data.tracking_mode = 0 
             print("sent the detection msg")
             self.box_publisher.publish(self.objects_data)
 
