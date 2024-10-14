@@ -68,6 +68,7 @@ from avix_utils.srv import ObjectDetectionStatus, EnableFunction, GetGimbalInfo
 torch.cuda.device(0)
 torch.manual_seed(23) #for cuda initialization bugs
 torch.device('cuda' if torch.cuda.is_available() else 'cpu' )
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy, QoSReliabilityPolicy
 
 # status system 
 from dataclasses import dataclass
@@ -94,11 +95,19 @@ class TrackingNode(Node):
         self.spatial_REID_enabled = self.get_parameter('enable_spatial_REID').value
         
         # Subscribe to image coming
+
+        # Create a QoS profile with a queue size of 1 (keep only the latest message)
+        qos_profile = QoSProfile(
+            depth=1,  # Queue size
+            history=QoSHistoryPolicy.KEEP_LAST,  # Keep only the last message
+            durability=QoSDurabilityPolicy.VOLATILE,  # Volatile to avoid storing messages if no subscriber
+            reliability=QoSReliabilityPolicy.BEST_EFFORT  # Ensure reliable delivery
+        )
         self.image_subscriber = self.create_subscription(
             Image, 
             avix_common.KTG_EO_IMG, 
             self.image_callback,   
-            10
+            qos_profile
         )
         self.eo_zoom=1
         self.ktg_info_subscriber = self.create_subscription(

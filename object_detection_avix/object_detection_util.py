@@ -61,8 +61,8 @@ class botsortConfig():
         self.aspect_ratio_thresh = 1.6
         self.min_box_area = 10
         self.mot20 = False
-        self.cmc_method = 'orb'
-        # self.cmc_method = 'sparseOptFlow'
+        # self.cmc_method = 'orb'
+        self.cmc_method = 'sparseOptFlow'
         self.ablation = False
         self.with_reid = True
         self.fast_reid_config = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/fast_reid/configs/Market1501/sbs_R50-ibn.yml"
