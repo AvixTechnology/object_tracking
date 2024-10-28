@@ -64,7 +64,7 @@ class botsortConfig():
         # self.cmc_method = 'orb'
         self.cmc_method = 'sparseOptFlow'
         self.ablation = False
-        self.with_reid = True
+        self.with_reid = False
         self.fast_reid_config = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/fast_reid/configs/Market1501/sbs_R50-ibn.yml"
         self.fast_reid_weights = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/pretrained/market_sbs_R50-ibn.pth"
         # self.fast_reid_config = r"/home/nvidia/tracking_modules/BoT-SORT/fast_reid/configs/Market1501/sbs_R50-ibn.yml"
@@ -101,7 +101,7 @@ class ReIDTrack():
         self.yolo_data = []
         self.BotSort_data = []
         tic = time.time()
-        results = self.model.predict(source = frame ,conf=0.3, classes=[0,1,2,3,41],imgsz=640,verbose=False, half = True, device="cuda:0",)
+        results = self.model.predict(source = frame ,conf=0.3, classes=[0,1,2,3],imgsz=(736,1280),verbose=False, half = True, device="cuda:0",)
         #print(results[0].boxes)    
         # toc = time.time()
         # predict_time=toc - tic

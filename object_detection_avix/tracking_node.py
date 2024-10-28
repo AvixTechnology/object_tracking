@@ -181,14 +181,14 @@ class TrackingNode(Node):
         if(not torch.cuda.is_available()):
             self.get_logger().error(f'Pytorch has no cuda support, please reinstall')
 
-        self.get_logger().info(f'Initializing Model11...')
+        self.get_logger().info(f'Initializing Model1112...')
 
         # Initialize CV bridge
         self.bridge = CvBridge()
 
         self.model=ReIDTrack(self.get_logger())
         # Generate a random image
-        random_image = np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8)
+        random_image = np.random.randint(0, 256, (720, 1280, 3), dtype=np.uint8)
 
         # Convert the image to bgr8 format
         random_image_bgr8 = cv2.cvtColor(random_image, cv2.COLOR_RGB2BGR)
@@ -225,7 +225,7 @@ class TrackingNode(Node):
         # request the camera info
         self.get_camera_info()
 
-        self.get_logger().info(f'*******Object Detection Node startedasd (V1.0.1)**********')
+        self.get_logger().info(f'*******Object Detection Node startedasd123 (V1.0.1)**********')
 
     
     # ============service related============
@@ -470,7 +470,7 @@ class TrackingNode(Node):
             tlbr = t.tlbr
             tid = t.track_id
             tcls = t.cls
-            c,  id = int(tcls), int(tid) 
+            c,  id = int(tcls), int(tid) % 65535
             x1,y1,x2,y2=tlbr[0],tlbr[1],tlbr[2],tlbr[3]
 
 
