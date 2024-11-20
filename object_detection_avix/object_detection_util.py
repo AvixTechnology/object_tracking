@@ -64,7 +64,7 @@ class botsortConfig():
         # self.cmc_method = 'orb'
         self.cmc_method = 'sparseOptFlow'
         self.ablation = False
-        self.with_reid = True
+        self.with_reid = False
         self.fast_reid_config = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/fast_reid/configs/Market1501/sbs_R50-ibn.yml"
         self.fast_reid_weights = r"/home/nvidia/Documents/avix/inference_dependency/BoT-SORT/pretrained/market_sbs_R50-ibn.pth"
         # self.fast_reid_config = r"/home/nvidia/tracking_modules/BoT-SORT/fast_reid/configs/Market1501/sbs_R50-ibn.yml"

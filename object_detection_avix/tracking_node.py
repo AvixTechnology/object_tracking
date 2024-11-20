@@ -181,7 +181,7 @@ class TrackingNode(Node):
         if(not torch.cuda.is_available()):
             self.get_logger().error(f'Pytorch has no cuda support, please reinstall')
 
-        self.get_logger().info(f'Initializing Model11...')
+        self.get_logger().info(f'Initializing Model1112...')
 
         # Initialize CV bridge
         self.bridge = CvBridge()
@@ -225,7 +225,7 @@ class TrackingNode(Node):
         # request the camera info
         self.get_camera_info()
 
-        self.get_logger().info(f'*******Object Detection Node startedasd (V1.0.1)**********')
+        self.get_logger().info(f'*******Object Detection Node startedasd123 (V1.0.1)**********')
 
     
     # ============service related============
