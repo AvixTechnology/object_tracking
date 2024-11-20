@@ -101,7 +101,7 @@ class ReIDTrack():
         self.yolo_data = []
         self.BotSort_data = []
         tic = time.time()
-        results = self.model.predict(source = frame ,conf=0.3, classes=[0,1,2,3,41],imgsz=640,verbose=False, half = True, device="cuda:0",)
+        results = self.model.predict(source = frame ,conf=0.3, classes=[0,2,8],imgsz=(736,1280),verbose=False, half = True, device="cuda:0",)
         #print(results[0].boxes)    
         # toc = time.time()
         # predict_time=toc - tic

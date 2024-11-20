@@ -188,7 +188,7 @@ class TrackingNode(Node):
 
         self.model=ReIDTrack(self.get_logger())
         # Generate a random image
-        random_image = np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8)
+        random_image = np.random.randint(0, 256, (720, 1280, 3), dtype=np.uint8)
 
         # Convert the image to bgr8 format
         random_image_bgr8 = cv2.cvtColor(random_image, cv2.COLOR_RGB2BGR)
@@ -470,7 +470,7 @@ class TrackingNode(Node):
             tlbr = t.tlbr
             tid = t.track_id
             tcls = t.cls
-            c,  id = int(tcls), int(tid) 
+            c,  id = int(tcls), int(tid)%65535
             x1,y1,x2,y2=tlbr[0],tlbr[1],tlbr[2],tlbr[3]
 
 
